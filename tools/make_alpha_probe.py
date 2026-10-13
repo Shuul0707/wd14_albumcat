@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(r"E:\AlbumCategories")
-SRC = ROOT / "samples" / "97e5e12787c3d0b146edd718e57e6d7c.jpg"
+SRC = ROOT / "samples" / "05acb463acd2427a65412bf1dbf9ceb5.jpg"
 DEST = ROOT / ".tmp" / "aves-probe" / "zz-alpha-reimu.png"
 
 im = Image.open(SRC).convert("RGB")

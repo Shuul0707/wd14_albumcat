@@ -52,13 +52,13 @@ SENTINEL = "AVES-PROBE-1234"
 SAMPLES: dict[str, tuple[str, str]] = {
     "f52b341d2a083d34bc607a4dd6457545.jpg": ("Kasane Teto", "Vocaloid"),
     "7fe97f53b11ab42ba94084450e3e92d4.jpg": ("Shameimaru Aya", "Touhou Project"),
-    "97e5e12787c3d0b146edd718e57e6d7c.jpg": ("Hakurei Reimu", "Touhou Project"),
+    "05acb463acd2427a65412bf1dbf9ceb5.jpg": ("Hakurei Reimu", "Touhou Project"),
 }
 
 # One of the above, re-encoded as PNG. Only one: a PNG of a full-size photo is
 # several MB, and one is enough to answer the question. See the module docstring
 # for why a JPEG-only probe is not enough.
-PNG_FROM = "97e5e12787c3d0b146edd718e57e6d7c.jpg"
+PNG_FROM = "05acb463acd2427a65412bf1dbf9ceb5.jpg"
 
 
 def probe_fields(character: str, series: str) -> tuple[list[str], list[str]]:

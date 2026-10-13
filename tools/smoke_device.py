@@ -73,7 +73,7 @@ TREE_URI = "content://com.android.externalstorage.documents/tree/primary%3ADCIM%
 # kind of file a phone actually produces.
 PHOTOS = [
     "samples/7fe97f53b11ab42ba94084450e3e92d4.jpg",
-    "samples/97e5e12787c3d0b146edd718e57e6d7c.jpg",
+    "samples/05acb463acd2427a65412bf1dbf9ceb5.jpg",
     "samples/f52b341d2a083d34bc607a4dd6457545.jpg",
     "samples/698bb1e8a6e2b4e22e686a66f433d9e4.png",
 ]
