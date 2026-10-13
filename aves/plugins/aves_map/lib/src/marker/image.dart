@@ -1,0 +1,163 @@
+import 'package:aves_map/aves_map.dart';
+import 'package:aves_map/src/marker/arrow_painter.dart';
+import 'package:collection/collection.dart';
+import 'package:custom_rounded_rectangle_border/custom_rounded_rectangle_border.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const ImageMarker({
+  super.key,
+  required final int? count,
+  required final String Function(num count) countFormatter,
+  final bool drawArrow = true,
+  required final Widget Function(double extent) buildThumbnailImage,
+}) extends StatelessWidget {
+  static const double outerBorderRadiusDim = 8;
+  static const outerBorderWidth = MapThemeData.markerOuterBorderWidth;
+  static const innerBorderWidth = MapThemeData.markerInnerBorderWidth;
+  static const extent = MapThemeData.markerImageExtent;
+  static const arrowSize = MapThemeData.markerArrowSize;
+  static const outerBorderRadius = BorderRadius.all(Radius.circular(outerBorderRadiusDim));
+  static const innerRadius = Radius.circular(outerBorderRadiusDim - outerBorderWidth);
+  static const innerBorderRadius = BorderRadius.all(innerRadius);
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child = buildThumbnailImage(extent);
+
+    // need to be sized for the Google map marker generator
+    child = SizedBox(
+      width: extent,
+      height: extent,
+      child: child,
+    );
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final outerBorderColor = MapThemeData.markerThemedOuterBorderColor(isDark);
+    final innerBorderColor = MapThemeData.markerThemedInnerBorderColor(isDark);
+
+    final outerDecoration = BoxDecoration(
+      border: Border.fromBorderSide(
+        BorderSide(
+          color: outerBorderColor,
+          width: outerBorderWidth,
+        ),
+      ),
+      borderRadius: outerBorderRadius,
+    );
+
+    final innerDecoration = BoxDecoration(
+      border: Border.fromBorderSide(
+        BorderSide(
+          color: innerBorderColor,
+          width: innerBorderWidth,
+        ),
+      ),
+      borderRadius: innerBorderRadius,
+    );
+
+    child = DecoratedBox(
+      decoration: innerDecoration,
+      position: DecorationPosition.foreground,
+      child: ClipRRect(
+        borderRadius: innerBorderRadius,
+        child: child,
+      ),
+    );
+
+    final _count = count;
+    if (_count != null) {
+      final borderSide = BorderSide(
+        color: innerBorderColor,
+        width: innerBorderWidth,
+      );
+      child = Stack(
+        children: [
+          child,
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 2),
+            decoration: ShapeDecoration(
+              color: theme.colorScheme.primary,
+              shape: _buildCornerDetailShape(context, borderSide),
+            ),
+            child: Text(
+              countFormatter(_count),
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onPrimary,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    child = Container(
+      decoration: outerDecoration,
+      child: child,
+    );
+
+    if (drawArrow) {
+      child = CustomPaint(
+        foregroundPainter: MarkerArrowPainter(
+          color: innerBorderColor,
+          outlineColor: outerBorderColor,
+          outlineWidth: outerBorderWidth,
+          size: arrowSize,
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: arrowSize.height),
+          child: child,
+        ),
+      );
+    }
+
+    return child;
+  }
+
+  ShapeBorder _buildCornerDetailShape(BuildContext context, BorderSide side) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    return CustomRoundedRectangleBorder(
+      leftSide: side,
+      rightSide: side,
+      topSide: side,
+      bottomSide: side,
+      topLeftCornerSide: isRtl ? null : side,
+      topRightCornerSide: isRtl ? side : null,
+      bottomLeftCornerSide: isRtl ? side : null,
+      bottomRightCornerSide: isRtl ? null : side,
+      borderRadius: BorderRadius.only(
+        topLeft: isRtl ? Radius.zero : innerRadius,
+        topRight: isRtl ? innerRadius : Radius.zero,
+        bottomLeft: isRtl ? innerRadius : Radius.zero,
+        bottomRight: isRtl ? Radius.zero : innerRadius,
+      ),
+    );
+  }
+
+  static const _crs = Epsg3857();
+
+  static GeoEntry<T>? markerMatch<T>(LatLng position, double zoom, Set<GeoEntry<T>> markers) {
+    final pressOffset = _crs.latLngToOffset(position, zoom);
+
+    const double markerWidth = extent;
+    const double markerHeight = extent;
+
+    return markers.firstWhereOrNull((marker) {
+      final latitude = marker.latitude;
+      final longitude = marker.longitude;
+      if (latitude == null || longitude == null) return false;
+
+      final markerAnchorPoint = _crs.latLngToOffset(LatLng(latitude, longitude), zoom);
+      final bottom = markerAnchorPoint.dy;
+      final top = bottom - markerHeight;
+      final left = markerAnchorPoint.dx - markerWidth / 2;
+      final right = left + markerWidth;
+      final markerRect = Rect.fromLTRB(left, top, right, bottom);
+
+      return markerRect.contains(pressOffset);
+    });
+  }
+}

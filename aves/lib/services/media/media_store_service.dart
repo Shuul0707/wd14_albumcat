@@ -1,0 +1,112 @@
+import 'dart:async';
+
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/services/common/channel.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:flutter/services.dart';
+
+abstract class MediaStoreService {
+  Future<List<int>> checkObsoleteContentIds(List<int?> knownContentIds);
+
+  Future<List<int>> checkObsoletePaths(Map<int?, String?> knownPathById);
+
+  Future<List<String>> getChangedUris(Map<String, int?> sinceGenerationByVolume);
+
+  Future<Map<String, int>?> getGenerationByVolume();
+
+  // knownEntries: map of contentId -> dateModifiedMillis
+  Stream<AvesEntry> getEntries(Map<int?, int?> knownEntries, {String? directory});
+
+  // returns media URI
+  Future<Uri?> scanFile(String path, String mimeType);
+}
+
+class PlatformMediaStoreService implements MediaStoreService {
+  static const _platform = AvesMethodChannel('deckers.thibault/aves/media_store');
+  static final _stream = AvesStreamsChannel('deckers.thibault/aves/media_store_stream');
+
+  @override
+  Future<List<int>> checkObsoleteContentIds(List<int?> knownContentIds) async {
+    try {
+      final result = await _platform.invokeMethod('checkObsoleteContentIds', <String, Object?>{
+        'knownContentIds': knownContentIds,
+      });
+      return (result as List).cast<int>();
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+    return [];
+  }
+
+  @override
+  Future<List<int>> checkObsoletePaths(Map<int?, String?> knownPathById) async {
+    try {
+      final result = await _platform.invokeMethod('checkObsoletePaths', <String, Object?>{
+        'knownPathById': knownPathById,
+      });
+      return (result as List).cast<int>();
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+    return [];
+  }
+
+  @override
+  Future<List<String>> getChangedUris(Map<String, int?> sinceGenerationByVolume) async {
+    try {
+      final result = await _platform.invokeMethod('getChangedUris', <String, Object?>{
+        'sinceGenerationByVolume': sinceGenerationByVolume,
+      });
+      return (result as List).cast<String>();
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+    return [];
+  }
+
+  @override
+  Future<Map<String, int>?> getGenerationByVolume() async {
+    try {
+      var result = await _platform.invokeMethod('getGenerationByVolume');
+      if (result != null) return (result as Map).cast<String, int>();
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+    return null;
+  }
+
+  @override
+  Stream<AvesEntry> getEntries(Map<int?, int?> knownEntries, {String? directory}) {
+    try {
+      return _stream
+          .receiveBroadcastStream(<String, Object?>{
+            'knownEntries': knownEntries,
+            'directory': directory,
+          })
+          .where((event) => event is Map)
+          .map((event) {
+            final fields = event as Map;
+            AvesEntry.normalizeMimeTypeFields(fields);
+            return AvesEntry.fromMap(fields);
+          });
+    } on PlatformException catch (e, stack) {
+      reportService.recordError(e, stack);
+      return Stream.error(e);
+    }
+  }
+
+  // returns media URI
+  @override
+  Future<Uri?> scanFile(String path, String mimeType) async {
+    try {
+      final result = await _platform.invokeMethod('scanFile', <String, Object?>{
+        'path': path,
+        'mimeType': mimeType,
+      });
+      if (result != null) return Uri.tryParse(result);
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+    return null;
+  }
+}

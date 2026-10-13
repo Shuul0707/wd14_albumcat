@@ -1,0 +1,81 @@
+import 'package:aves/widgets/common/basic/text/fading_line.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:aves/widgets/dialogs/selection_dialogs/common.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const AvesMultiSelectionDialog<T>({
+  super.key,
+  required final Set<T> initialValue,
+  required final Map<T, String> options,
+  final TextBuilder<T>? optionSubtitleBuilder,
+  final String? title,
+  final String? message,
+  final bool? dense,
+}) extends StatefulWidget {
+  static const routeName = '/dialog/multi_selection';
+
+  @override
+  State<AvesMultiSelectionDialog<T>> createState() => _AvesMultiSelectionDialogState<T>();
+}
+
+class _AvesMultiSelectionDialogState<T> extends State<AvesMultiSelectionDialog<T>> {
+  late Set<T> _selectedValues;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedValues = widget.initialValue;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.title;
+    final message = widget.message;
+    final verticalPadding = (title == null && message == null) ? AvesDialog.cornerRadius.y / 2 : .0;
+    return AvesDialog(
+      title: title,
+      scrollableContent: [
+        if (verticalPadding != 0) SizedBox(height: verticalPadding),
+        if (message != null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(message),
+          ),
+        ...widget.options.entries.map((kv) {
+          final value = kv.key;
+          final title = kv.value;
+          final subtitle = widget.optionSubtitleBuilder?.call(value);
+          return SwitchListTile(
+            value: _selectedValues.contains(value),
+            onChanged: (v) {
+              if (v) {
+                _selectedValues.add(value);
+              } else {
+                _selectedValues.remove(value);
+              }
+              setState(() {});
+            },
+            title: Align(
+              alignment: .centerStart,
+              child: Text(title),
+            ),
+            subtitle: subtitle != null ? FadingLine(subtitle) : null,
+            dense: widget.dense,
+          );
+        }),
+        if (verticalPadding != 0) SizedBox(height: verticalPadding),
+      ],
+      actions: [
+        const CancelButton(),
+        TextButton(
+          onPressed: () {
+            final result = widget.options.keys.where(_selectedValues.contains).toList();
+            return Navigator.maybeOf(context)?.pop<List<T>>(result);
+          },
+          child: Text(context.l10n.applyButtonLabel),
+        ),
+      ],
+    );
+  }
+}

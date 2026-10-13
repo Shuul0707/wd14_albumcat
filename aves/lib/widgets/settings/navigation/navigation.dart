@@ -1,0 +1,204 @@
+import 'dart:async';
+
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/theme/colors.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/text.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/settings/common/tile_leading.dart';
+import 'package:aves/widgets/settings/common/tiles/single_selection.dart';
+import 'package:aves/widgets/settings/common/tiles/sub_page.dart';
+import 'package:aves/widgets/settings/common/tiles/switch_list.dart';
+import 'package:aves/widgets/settings/navigation/bottom_nav_actions_editor_page.dart';
+import 'package:aves/widgets/settings/navigation/confirmation_dialog_page.dart';
+import 'package:aves/widgets/settings/navigation/drawer_editor_page.dart';
+import 'package:aves/widgets/settings/settings_definition.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:collection/collection.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class NavigationSection extends SettingsSection {
+  @override
+  String get key => 'navigation';
+
+  @override
+  Widget icon(BuildContext context) => SettingsTileLeading(
+    icon: AIcons.home,
+    color: context.select<AvesColorsData, Color>((v) => v.navigation),
+  );
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsNavigationSectionTitle;
+
+  @override
+  Future<List<SettingsTile>> tiles(BuildContext context) => Future.value([
+    SettingsTileNavigationHomePage(),
+    if (!settings.useTvLayout) SettingsTileNavigationKeepScreenOn(),
+    if (!settings.useTvLayout) SettingsTileNavigationDoubleBackExit(),
+    SettingsTileNavigationDrawer(),
+    if (!settings.useTvLayout) SettingsTileNavigationBottomActions(),
+    if (!settings.useTvLayout) SettingsTileNavigationConfirmationDialog(),
+  ]);
+}
+
+@immutable
+class _HomeOption {
+  final HomePageSetting page;
+  final Set<CollectionFilter> customCollection;
+  final String? customExplorerPath;
+
+  const new(
+    this.page, {
+    this.customCollection = const {},
+    this.customExplorerPath,
+  });
+
+  String getName(BuildContext context) {
+    final pageName = page.getName(context);
+    switch (page) {
+      case .collection:
+        return customCollection.isNotEmpty ? context.l10n.setHomeCustom : pageName;
+      case .explorer:
+        return customExplorerPath != null ? context.l10n.setHomeCustom : pageName;
+      default:
+        return pageName;
+    }
+  }
+
+  String? getDetails(BuildContext context) {
+    switch (page) {
+      case .collection:
+        final filters = customCollection;
+        return filters.isNotEmpty ? [context.l10n.collectionPageTitle, filters.map((v) => v.getLabel(context)).join(', ')].join(AText.separator) : null;
+      case .explorer:
+        final path = customExplorerPath;
+        return path != null ? [context.l10n.explorerPageTitle, pContext.basename(path)].join(AText.separator) : null;
+      default:
+        return null;
+    }
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is _HomeOption && runtimeType == other.runtimeType && page == other.page && const DeepCollectionEquality().equals(customCollection, other.customCollection) && customExplorerPath == other.customExplorerPath);
+
+  @override
+  int get hashCode => page.hashCode ^ customCollection.hashCode ^ customExplorerPath.hashCode;
+}
+
+class SettingsTileNavigationHomePage extends SettingsTile {
+  @override
+  List<String> get settingKeys => [
+    SettingKeys.homePageKey,
+    SettingKeys.homeCustomCollectionKey,
+    SettingKeys.homeCustomExplorerPathKey,
+  ];
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsHomeTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSelectionListTile<_HomeOption>(
+    values: [
+      const _HomeOption(HomePageSetting.collection),
+      const _HomeOption(HomePageSetting.albums),
+      const _HomeOption(HomePageSetting.tags),
+      const _HomeOption(HomePageSetting.explorer),
+      if (settings.homeCustomCollection.isNotEmpty) _HomeOption(HomePageSetting.collection, customCollection: settings.homeCustomCollection),
+      if (settings.homeCustomExplorerPath != null) _HomeOption(HomePageSetting.explorer, customExplorerPath: settings.homeCustomExplorerPath),
+    ],
+    getName: (context, v) => v.getName(context),
+    selector: (context, s) => _HomeOption(s.homePage, customCollection: s.homeCustomCollection, customExplorerPath: s.homeCustomExplorerPath),
+    onSelection: (v) => settings.setHome(
+      v.page,
+      customCollection: v.customCollection,
+      customExplorerPath: v.customExplorerPath,
+    ),
+    tileTitle: title,
+    dialogTitle: context.l10n.settingsHomeDialogTitle,
+    optionSubtitleBuilder: (v) => v.getDetails(context),
+  );
+}
+
+class SettingsTileNavigationDrawer extends SettingsTile {
+  @override
+  List<String> get settingKeys => NavigationDrawerEditorPage.settingKeys;
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsNavigationDrawerTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSubPageTile(
+    title: title,
+    routeName: NavigationDrawerEditorPage.routeName,
+    builder: (context) => const NavigationDrawerEditorPage(),
+  );
+}
+
+class SettingsTileNavigationBottomActions extends SettingsTile {
+  @override
+  List<String> get settingKeys => BottomNavigationActionEditorPage.settingKeys;
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsNavigationBottomActionsTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSubPageTile(
+    title: title,
+    routeName: BottomNavigationActionEditorPage.routeName,
+    builder: (context) => const BottomNavigationActionEditorPage(),
+  );
+}
+
+class SettingsTileNavigationConfirmationDialog extends SettingsTile {
+  @override
+  List<String> get settingKeys => ConfirmationDialogPage.settingKeys;
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsConfirmationTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSubPageTile(
+    title: title,
+    routeName: ConfirmationDialogPage.routeName,
+    builder: (context) => const ConfirmationDialogPage(),
+  );
+}
+
+class SettingsTileNavigationKeepScreenOn extends SettingsTile {
+  @override
+  List<String> get settingKeys => [SettingKeys.keepScreenOnKey];
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsKeepScreenOnTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSelectionListTile<KeepScreenOn>(
+    values: KeepScreenOn.values,
+    getName: (context, v) => v.getName(context),
+    selector: (context, s) => s.keepScreenOn,
+    onSelection: (v) => settings.keepScreenOn = v,
+    tileTitle: title,
+    dialogTitle: context.l10n.settingsKeepScreenOnDialogTitle,
+  );
+}
+
+class SettingsTileNavigationDoubleBackExit extends SettingsTile {
+  @override
+  List<String> get settingKeys => [SettingKeys.mustBackTwiceToExitKey];
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsDoubleBackExit;
+
+  @override
+  Widget build(BuildContext context) => SettingsSwitchListTile(
+    selector: (context, s) => s.mustBackTwiceToExit,
+    onChanged: (v) => settings.mustBackTwiceToExit = v,
+    title: title,
+  );
+}

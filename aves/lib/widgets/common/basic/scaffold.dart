@@ -1,0 +1,33 @@
+import 'package:material_ui/material_ui.dart';
+
+class const AvesScaffold({
+  super.key,
+  final PreferredSizeWidget? appBar,
+  final Widget? body,
+  final Widget? floatingActionButton,
+  final Widget? drawer,
+  final Widget? bottomNavigationBar,
+  final Color? backgroundColor,
+  final bool? resizeToAvoidBottomInset,
+  final bool extendBody = false,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    // prevent conflict between drawer drag gesture and Android navigation gestures
+    final drawerEnableOpenDragGesture = MediaQuery.systemGestureInsetsOf(context).horizontal == 0;
+
+    return BackdropGroup(
+      child: Scaffold(
+        appBar: appBar,
+        body: body,
+        floatingActionButton: floatingActionButton,
+        drawer: drawer,
+        bottomNavigationBar: bottomNavigationBar,
+        backgroundColor: backgroundColor,
+        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        extendBody: extendBody,
+        drawerEnableOpenDragGesture: drawerEnableOpenDragGesture,
+      ),
+    );
+  }
+}

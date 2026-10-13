@@ -1,0 +1,59 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+
+// `ChangeNotifier` wrapper to call `notify` without constraint
+class AChangeNotifier extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  bool get isDisposed => _isDisposed;
+
+  @override
+  void dispose() {
+    super.dispose();
+    _isDisposed = true;
+  }
+
+  void notify() {
+    // why is this protected?
+    super.notifyListeners();
+  }
+}
+
+// contrary to standard `ValueListenableBuilder`, this widget allows providing a null listenable
+class const NullableValueListenableBuilder<T>({
+  super.key,
+  required final ValueListenable<T?>? valueListenable,
+  required final ValueWidgetBuilder<T?> builder,
+  final Widget? child,
+}) extends StatefulWidget {
+  @override
+  State<NullableValueListenableBuilder> createState() => _NullableValueListenableBuilderState<T>();
+}
+
+class _NullableValueListenableBuilderState<T> extends State<NullableValueListenableBuilder<T>> {
+  ValueNotifier<T?>? _internalValueListenable;
+
+  ValueListenable<T?> get _valueListenable {
+    var listenable = widget.valueListenable;
+    if (listenable == null) {
+      _internalValueListenable ??= ValueNotifier(null);
+      listenable = _internalValueListenable;
+    }
+    return listenable!;
+  }
+
+  @override
+  void dispose() {
+    _internalValueListenable?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<T?>(
+      valueListenable: _valueListenable,
+      builder: widget.builder,
+      child: widget.child,
+    );
+  }
+}

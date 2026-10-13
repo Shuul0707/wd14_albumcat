@@ -1,0 +1,146 @@
+import 'dart:async';
+
+import 'package:aves/model/favourites.dart';
+import 'package:aves/model/filters/covered/location.dart';
+import 'package:aves/model/filters/covered/tag.dart';
+import 'package:aves/model/filters/path.dart';
+import 'package:aves/model/settings/enums/accessibility_animations.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/widgets/common/basic/font_size_icon_theme.dart';
+import 'package:aves/widgets/common/basic/popup/menu_row.dart';
+import 'package:aves/widgets/common/basic/scaffold.dart';
+import 'package:aves/widgets/common/behaviour/pop/scope.dart';
+import 'package:aves/widgets/common/behaviour/pop/tv_navigation.dart';
+import 'package:aves/widgets/common/extensions/media_query.dart';
+import 'package:aves/widgets/debug/app_debug_action.dart';
+import 'package:aves/widgets/debug/cache.dart';
+import 'package:aves/widgets/debug/capabilities.dart';
+import 'package:aves/widgets/debug/colors.dart';
+import 'package:aves/widgets/debug/database.dart';
+import 'package:aves/widgets/debug/general.dart';
+import 'package:aves/widgets/debug/groups.dart';
+import 'package:aves/widgets/debug/hdr.dart';
+import 'package:aves/widgets/debug/leaking.dart';
+import 'package:aves/widgets/debug/media_store_scan_dialog.dart';
+import 'package:aves/widgets/debug/os_apps.dart';
+import 'package:aves/widgets/debug/os_codecs.dart';
+import 'package:aves/widgets/debug/os_paths.dart';
+import 'package:aves/widgets/debug/os_storage.dart';
+import 'package:aves/widgets/debug/settings.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class const AppDebugPage({super.key}) extends StatelessWidget {
+  static const routeName = '/debug';
+
+  @override
+  Widget build(BuildContext context) {
+    final animations = context.select<Settings, AccessibilityAnimations>((v) => v.accessibilityAnimations);
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: AvesScaffold(
+        appBar: AppBar(
+          title: const Text('Debug'),
+          actions: [
+            FontSizeIconTheme(
+              child: PopupMenuButton<AppDebugAction>(
+                // key is expected by test driver
+                key: const Key('appbar-menu-button'),
+                itemBuilder: (context) => AppDebugAction.values
+                    .map(
+                      (v) => PopupMenuItem(
+                        // key is expected by test driver
+                        key: Key('menu-${v.name}'),
+                        value: v,
+                        child: MenuRow(text: v.name),
+                      ),
+                    )
+                    .toList(),
+                onSelected: (action) async {
+                  // wait for the popup menu to hide before proceeding with the action
+                  await Future.delayed(animations.popUpAnimationDelay * timeDilation);
+                  unawaited(_onActionSelected(context, action));
+                },
+                popUpAnimationStyle: animations.popUpAnimationStyle,
+              ),
+            ),
+          ],
+        ),
+        body: AvesPopScope(
+          handlers: [tvNavigationPopHandler],
+          child: SafeArea(
+            bottom: false,
+            child: Selector<MediaQueryData, double>(
+              selector: (context, mq) => mq.safeBottomPadding,
+              builder: (context, safeBottomPadding, child) {
+                return ListView(
+                  padding: const EdgeInsets.all(8) + EdgeInsets.only(bottom: safeBottomPadding),
+                  children: const [
+                    DebugGeneralSection(),
+                    DebugAppDatabaseSection(),
+                    DebugCacheSection(),
+                    DebugCapabilitiesSection(),
+                    DebugColorSection(),
+                    DebugHdrSection(),
+                    DebugLeakingSection(),
+                    DebugSettingsSection(),
+                    DebugGroupsSection(),
+                    DebugOSAppSection(),
+                    DebugOSCodecSection(),
+                    DebugOSPathSection(),
+                    DebugOSStorageSection(),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onActionSelected(BuildContext context, AppDebugAction action) async {
+    switch (action) {
+      case .prepScreenshotThumbnails:
+        // get source beforehand, as widget may be unmounted during action handling
+        final source = context.read<CollectionSource>();
+        settings.changeFilterVisibility(settings.hiddenFilters, true);
+        settings.changeFilterVisibility({
+          TagFilter('aves-thumbnail', reversed: true),
+        }, false);
+        await favourites.clear();
+        await favourites.add(source.visibleEntries);
+      case .prepScreenshotStats:
+        settings.changeFilterVisibility(settings.hiddenFilters, true);
+        settings.changeFilterVisibility({
+          PathFilter('/storage/emulated/0/Pictures/Dev'),
+        }, false);
+      case .prepScreenshotCountries:
+        settings.changeFilterVisibility({
+          LocationFilter(LocationLevel.country, 'Belgium;BE'),
+          LocationFilter(LocationLevel.country, 'Croatia;HR'),
+        }, false);
+      case .mediaStoreScanDir:
+        // scan files copied from test assets
+        // we do it via the app instead of broadcasting via ADB
+        // because `MEDIA_SCANNER_SCAN_FILE` intent got deprecated in API 29
+        await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const MediaStoreScanDirDialog(),
+        );
+      case .greenScreen:
+        await Navigator.maybeOf(context)?.push(
+          MaterialPageRoute(
+            builder: (context) => const Scaffold(
+              backgroundColor: Colors.green,
+              body: SizedBox(),
+            ),
+          ),
+        );
+    }
+  }
+}

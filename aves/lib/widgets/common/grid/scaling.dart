@@ -1,0 +1,271 @@
+import 'package:aves/model/highlight.dart';
+import 'package:aves/widgets/common/behaviour/eager_scale_gesture_recognizer.dart';
+import 'package:aves/widgets/common/grid/sections/fixed/scale_overlay.dart';
+import 'package:aves/widgets/common/grid/sections/mosaic/scale_overlay.dart';
+import 'package:aves/widgets/common/grid/sections/section_layout_builder.dart';
+import 'package:aves/widgets/common/grid/theme.dart';
+import 'package:aves/widgets/common/providers/tile_extent_controller_provider.dart';
+import 'package:aves/widgets/common/tile_extent_controller.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+// metadata to identify entry from RenderObject hit test during collection scaling
+class ScalerMetadata<T> {
+  final T item;
+
+  const new(this.item);
+}
+
+class GridScaleGestureDetector<T> extends StatefulWidget {
+  final GlobalKey scrollableKey;
+  final TileLayout tileLayout;
+  final double Function(double width) heightForWidth;
+  final Widget Function(Offset center, Size tileSize, Widget child) gridBuilder;
+  final TileBuilder<T> scaledItemBuilder;
+  final MosaicItemBuilder mosaicItemBuilder;
+  final Object Function(T item)? highlightItem;
+  final Widget child;
+
+  const new({
+    super.key,
+    required this.scrollableKey,
+    required this.tileLayout,
+    required this.heightForWidth,
+    required this.gridBuilder,
+    required this.scaledItemBuilder,
+    required this.mosaicItemBuilder,
+    this.highlightItem,
+    required this.child,
+  });
+
+  @override
+  State<GridScaleGestureDetector<T>> createState() => _GridScaleGestureDetectorState<T>();
+}
+
+class _GridScaleGestureDetectorState<T> extends State<GridScaleGestureDetector<T>> {
+  Size? _startSize;
+  double? _extentMin, _extentMax;
+  bool _applyingScale = false;
+  ValueNotifier<Size>? _scaledSizeNotifier;
+  OverlayEntry? _overlayEntry;
+  ScalerMetadata<T>? _metadata;
+
+  TileLayout get tileLayout => widget.tileLayout;
+
+  @override
+  void dispose() {
+    _scaledSizeNotifier?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gestureSettings = MediaQuery.gestureSettingsOf(context);
+
+    final child = GestureDetector(
+      // Horizontal/vertical drag gestures are interpreted as scaling
+      // if they are not handled by `onHorizontalDragStart`/`onVerticalDragStart`
+      // at the scaling `GestureDetector` level, or handled beforehand down the widget tree.
+      // Setting `onHorizontalDragStart`, `onVerticalDragStart`, and `onScaleStart`
+      // all at once is not allowed, so we use another `GestureDetector` for that.
+      onVerticalDragStart: (details) {},
+      onHorizontalDragStart: (details) {},
+      child: widget.child,
+    );
+
+    // as of Flutter v2.5.3, `ScaleGestureRecognizer` does not work well
+    // when combined with the `VerticalDragGestureRecognizer` inside a `GridView`,
+    // so it is modified to eagerly accept the gesture
+    // when multiple pointers are involved, and take priority over drag gestures.
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        EagerScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<EagerScaleGestureRecognizer>(
+          () => EagerScaleGestureRecognizer(debugOwner: this),
+          (instance) {
+            instance
+              ..onStart = _onScaleStart
+              ..onUpdate = _onScaleUpdate
+              ..onEnd = _onScaleEnd
+              ..dragStartBehavior = DragStartBehavior.start
+              ..gestureSettings = gestureSettings;
+          },
+        ),
+      },
+      child: child,
+    );
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    // the gesture detector wrongly detects a new scaling gesture
+    // when scaling ends and we apply the new extent, so we prevent this
+    // until we scaled and scrolled to the tile in the new grid
+    if (_applyingScale) return;
+
+    final tileExtentController = context.read<TileExtentController>();
+
+    final scrollableContext = widget.scrollableKey.currentContext!;
+    final scrollableBox = scrollableContext.findRenderObject() as RenderBox;
+    final renderMetaData = _getClosestRenderMetadata(
+      box: scrollableBox,
+      localFocalPoint: details.localFocalPoint,
+      spacing: tileExtentController.spacing,
+    );
+    // abort if we cannot find an image to show on overlay
+    if (renderMetaData == null) return;
+    final metadata = renderMetaData.metaData;
+    if (metadata is! ScalerMetadata<T>) return;
+    _metadata = metadata;
+
+    Size? startSize;
+    switch (tileLayout) {
+      case .mosaic:
+        startSize = Size.square(tileExtentController.extentNotifier.value);
+      case .grid:
+      case .list:
+        startSize = renderMetaData.size;
+      case .calendar:
+        // no scaling
+        break;
+    }
+    _startSize = startSize;
+    if (startSize == null) return;
+
+    _scaledSizeNotifier = ValueNotifier(startSize);
+
+    // not the same as `MediaQuery` metrics, because of screen insets/padding
+    final scrollViewRect = scrollableBox.localToGlobal(Offset.zero) & scrollableBox.size;
+    final contentRect = scrollViewRect.deflate(tileExtentController.horizontalPadding);
+
+    _extentMin = tileExtentController.effectiveExtentMin;
+    _extentMax = tileExtentController.effectiveExtentMax;
+
+    final halfSize = startSize / 2;
+    OverlayEntry? overlayEntry;
+    switch (tileLayout) {
+      case .mosaic:
+        overlayEntry = OverlayEntry(
+          builder: (context) => MosaicScaleOverlay(
+            contentRect: contentRect,
+            spacing: tileExtentController.spacing,
+            extentMax: _extentMax!,
+            scaledSizeNotifier: _scaledSizeNotifier!,
+            itemBuilder: widget.mosaicItemBuilder,
+          ),
+        );
+      case .grid:
+      case .list:
+        final tileCenter = renderMetaData.localToGlobal(Offset(halfSize.width, halfSize.height));
+        overlayEntry = OverlayEntry(
+          builder: (context) => TileExtentControllerProvider(
+            controller: tileExtentController,
+            child: FixedExtentScaleOverlay(
+              tileLayout: tileLayout,
+              tileCenter: tileCenter,
+              contentRect: contentRect,
+              scaledSizeNotifier: _scaledSizeNotifier!,
+              gridBuilder: widget.gridBuilder,
+              builder: (scaledTileSize) => SizedBox.fromSize(
+                size: scaledTileSize,
+                child: GridTheme(
+                  extent: tileLayout == .grid ? scaledTileSize.width : scaledTileSize.height,
+                  child: widget.scaledItemBuilder(_metadata!.item, scaledTileSize),
+                ),
+              ),
+            ),
+          ),
+        );
+      case .calendar:
+        // no scaling
+        break;
+    }
+    _overlayEntry = overlayEntry;
+    if (overlayEntry != null) {
+      Overlay.of(scrollableContext).insert(overlayEntry);
+    }
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    final startSize = _startSize;
+    final scaledSizeNotifier = _scaledSizeNotifier;
+    if (startSize == null || scaledSizeNotifier == null) return;
+
+    final s = details.scale;
+    switch (tileLayout) {
+      case .mosaic:
+      case .grid:
+        final scaledWidth = (startSize.width * s).clamp(_extentMin!, _extentMax!);
+        scaledSizeNotifier.value = Size(scaledWidth, widget.heightForWidth(scaledWidth));
+      case .list:
+        final scaledHeight = (startSize.height * s).clamp(_extentMin!, _extentMax!);
+        scaledSizeNotifier.value = Size(startSize.width, scaledHeight);
+      case .calendar:
+        // no scaling
+        break;
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    final scaledSizeNotifier = _scaledSizeNotifier;
+    if (scaledSizeNotifier == null) return;
+
+    final scaledSize = scaledSizeNotifier.value;
+    scaledSizeNotifier.dispose();
+    _scaledSizeNotifier = null;
+
+    _overlayEntry
+      ?..remove()
+      ..dispose();
+    _overlayEntry = null;
+
+    _applyingScale = true;
+    final tileExtentController = context.read<TileExtentController>();
+    final oldExtent = tileExtentController.extentNotifier.value;
+    // sanitize and update grid layout if necessary
+    late final double preferredExtent;
+    switch (tileLayout) {
+      case .mosaic:
+      case .grid:
+        preferredExtent = scaledSize.width;
+      case .list:
+        preferredExtent = scaledSize.height;
+      case .calendar:
+        // no scaling
+        break;
+    }
+    final newExtent = tileExtentController.setUserPreferredExtent(preferredExtent);
+    if (newExtent == oldExtent) {
+      _applyingScale = false;
+    } else {
+      // scroll to show the focal point thumbnail at its new position
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final trackItem = _metadata!.item;
+        final highlightItem = widget.highlightItem?.call(trackItem) ?? trackItem;
+        context.read<HighlightInfo>().trackItem(trackItem, animate: false, highlightItem: highlightItem);
+        _applyingScale = false;
+      });
+    }
+  }
+
+  RenderMetaData? _getClosestRenderMetadata({
+    required RenderBox box,
+    required Offset localFocalPoint,
+    required double spacing,
+  }) {
+    var position = localFocalPoint;
+    while (position.dx > 0 && position.dy > 0) {
+      final result = BoxHitTestResult();
+      box.hitTest(result, position: position);
+
+      // find `RenderObject`s at the gesture focal point
+      U? firstOf<U>(BoxHitTestResult result) => result.path.firstWhereOrNull((el) => el.target is U)?.target as U?;
+      final renderMetaData = firstOf<RenderMetaData>(result);
+      if (renderMetaData != null) return renderMetaData;
+      position = position.translate(-spacing, -spacing);
+    }
+    return null;
+  }
+}

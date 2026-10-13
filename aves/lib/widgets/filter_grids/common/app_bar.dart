@@ -1,0 +1,531 @@
+import 'dart:async';
+
+import 'package:aves/app_mode.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/grouping/common.dart';
+import 'package:aves/model/query.dart';
+import 'package:aves/model/selection.dart';
+import 'package:aves/model/settings/enums/accessibility_animations.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/theme/durations.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/aves_app.dart';
+import 'package:aves/widgets/common/action_controls/togglers/title_search.dart';
+import 'package:aves/widgets/common/bars/app_bar_subtitle.dart';
+import 'package:aves/widgets/common/bars/app_bar_title.dart';
+import 'package:aves/widgets/common/bars/app_bar.dart';
+import 'package:aves/widgets/common/bars/crumb_line.dart';
+import 'package:aves/widgets/common/basic/popup/menu_row.dart';
+import 'package:aves/widgets/common/basic/text/fading_line.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/identity/aves_filter_chip.dart';
+import 'package:aves/widgets/common/identity/buttons/captioned_button.dart';
+import 'package:aves/widgets/common/providers/filter_group_provider.dart';
+import 'package:aves/widgets/filter_grids/common/action_delegates/chip_set.dart';
+import 'package:aves/widgets/filter_grids/common/group_crumb_line.dart';
+import 'package:aves/widgets/filter_grids/common/query_bar.dart';
+import 'package:aves/widgets/search/collection_search_page_route.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+typedef ActionsBuilder<T extends CollectionFilter, CSAD extends ChipSetActionDelegate<T>> = List<Widget> Function(
+  BuildContext context,
+  AppMode appMode,
+  Selection<FilterGridItem<T>> selection,
+  CSAD actionDelegate,
+);
+
+class FilterGridAppBar<T extends CollectionFilter, CSAD extends ChipSetActionDelegate<T>> extends StatefulWidget {
+  final CollectionSource source;
+  final String title;
+  final CSAD actionDelegate;
+  final ActionsBuilder<T, CSAD>? actionsBuilder;
+  final ValueNotifier<double> appBarHeightNotifier;
+  final ScrollController scrollController;
+  final void Function(BuildContext context, T filter)? onGroupCrumbTap;
+
+  const new({
+    super.key,
+    required this.source,
+    required this.title,
+    required this.actionDelegate,
+    this.actionsBuilder,
+    required this.appBarHeightNotifier,
+    required this.scrollController,
+    required this.onGroupCrumbTap,
+  });
+
+  @override
+  State<FilterGridAppBar<T, CSAD>> createState() => _FilterGridAppBarState<T, CSAD>();
+
+  static PopupMenuEntry<ChipSetAction> toMenuItem(BuildContext context, ChipSetAction action, {required bool enabled}) {
+    late Widget child;
+    switch (action) {
+      case .toggleTitleSearch:
+        child = TitleSearchToggler(
+          queryEnabled: context.read<Query>().enabled,
+          isMenuItem: true,
+        );
+      default:
+        child = MenuRow(text: action.getText(context), icon: action.getIcon());
+    }
+
+    return PopupMenuItem(
+      value: action,
+      enabled: enabled,
+      child: child,
+    );
+  }
+}
+
+class _FilterGridAppBarState<T extends CollectionFilter, CSAD extends ChipSetActionDelegate<T>> extends State<FilterGridAppBar<T, CSAD>> with RouteAware, SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  final Set<StreamSubscription> _subscriptions = {};
+  late AnimationController _browseToSelectAnimation;
+  final ValueNotifier<bool> _isSelectingNotifier = ValueNotifier(false);
+  final FocusNode _queryBarFocusNode = FocusNode();
+  late final Listenable _queryFocusRequestNotifier;
+
+  CollectionSource get source => widget.source;
+
+  static const browsingQuickActions = <ChipSetAction>[
+    .search,
+  ];
+
+  static const selectionQuickActions = <ChipSetAction>[
+    .setCover,
+    .pin,
+    .unpin,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final query = context.read<Query>();
+    _subscriptions.add(query.enabledStream.listen((e) => _updateAppBarHeight()));
+    _queryFocusRequestNotifier = query.focusRequestNotifier;
+    _queryFocusRequestNotifier.addListener(_onQueryFocusRequest);
+    _queryBarFocusNode.addListener(_onQueryBarFocusChanged);
+    _browseToSelectAnimation = AnimationController(
+      duration: context.read<DurationsData>().iconAnimation,
+      vsync: this,
+    );
+    _isSelectingNotifier.addListener(_onActivityChanged);
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateAppBarHeight());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      AvesApp.pageRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    _queryBarFocusNode.dispose();
+    _queryFocusRequestNotifier.removeListener(_onQueryFocusRequest);
+    _queryBarFocusNode.removeListener(_onQueryBarFocusChanged);
+    _isSelectingNotifier.dispose();
+    _browseToSelectAnimation.dispose();
+    _subscriptions
+      ..forEach((sub) => sub.cancel())
+      ..clear();
+    WidgetsBinding.instance.removeObserver(this);
+    AvesApp.pageRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPushNext() {
+    // unfocus when navigating away, so that when navigating back,
+    // the query bar does not get back focus and bring the keyboard
+    _queryBarFocusNode.unfocus();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // when text scale factor changes
+    _updateAppBarHeight();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appMode = context.watch<ValueNotifier<AppMode>>().value;
+    final selection = context.watch<Selection<FilterGridItem<T>>>();
+    final isSelecting = selection.isSelecting;
+    _isSelectingNotifier.value = isSelecting;
+    return NotificationListener<ScrollNotification>(
+      // cancel notification bubbling so that the draggable scroll bar
+      // does not misinterpret filter bar scrolling for collection scrolling
+      onNotification: (notification) => true,
+      child: Selector<Query, bool>(
+        selector: (context, query) => query.enabled,
+        builder: (context, queryEnabled, child) {
+          final actionDelegate = widget.actionDelegate;
+          final ActionsBuilder<T, CSAD> actionsBuilder = widget.actionsBuilder ?? _buildActions;
+          final useTvLayout = settings.useTvLayout;
+          return AvesAppBar(
+            contentHeight: _getAppBarContentHeight(context),
+            pinned: context.select<Selection<FilterGridItem<T>>, bool>((selection) => selection.isSelecting),
+            leading: _buildAppBarLeading(
+              hasDrawer: appMode.canNavigate,
+              isSelecting: isSelecting,
+            ),
+            title: _buildAppBarTitle(isSelecting),
+            actions: (context, maxWidth) => useTvLayout ? [] : actionsBuilder(context, appMode, selection, actionDelegate),
+            bottom: Column(
+              children: [
+                if (useTvLayout)
+                  SizedBox(
+                    height: CaptionedButton.getTelevisionButtonHeight(context),
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      scrollDirection: Axis.horizontal,
+                      children: actionsBuilder(context, appMode, selection, actionDelegate),
+                    ),
+                  ),
+                if (_showGroupCrumbLine(context))
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Container(
+                        padding: CrumbLine.padding,
+                        width: constraints.maxWidth,
+                        height: CrumbLine.getPreferredHeight(MediaQuery.textScalerOf(context)),
+                        child: Selector<FilterGroupNotifier, Uri?>(
+                          selector: (context, notifier) => notifier.value,
+                          builder: (context, groupUri, child) {
+                            WidgetBuilder? lastCrumbBuilder;
+                            final onGroupCrumbTap = widget.onGroupCrumbTap;
+                            if (onGroupCrumbTap != null) {
+                              final grouping = groupUri != null ? FilterGrouping.forUri(groupUri) : null;
+                              final groupFilter = grouping?.uriToFilter(groupUri);
+                              if (groupFilter is T) {
+                                lastCrumbBuilder = (context) => AvesFilterChip(
+                                  filter: groupFilter,
+                                  onTap: (_) => onGroupCrumbTap(context, groupFilter),
+                                  onLongPress: null,
+                                );
+                              }
+                            }
+                            return FilterGroupCrumbLine(
+                              key: const Key('crumbs'),
+                              groupUri: groupUri,
+                              onTap: (uri) => context.read<FilterGroupNotifier?>()?.value = uri,
+                              lastCrumbBuilder: lastCrumbBuilder,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                if (queryEnabled)
+                  FilterQueryBar<T>(
+                    queryNotifier: context.select<Query, ValueNotifier<String>>((query) => query.queryNotifier),
+                    focusNode: _queryBarFocusNode,
+                  ),
+              ],
+            ),
+            transitionKey: isSelecting,
+          );
+        },
+      ),
+    );
+  }
+
+  static bool _showGroupCrumbLine(BuildContext context) => context.read<FilterGrouping?>()?.isNotEmpty ?? false;
+
+  static bool _showQueryLine(BuildContext context) => context.read<Query?>()?.enabled ?? false;
+
+  static double _getAppBarContentHeight(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    double height = textScaler.scale(kToolbarHeight);
+    if (settings.useTvLayout) {
+      height += CaptionedButton.getTelevisionButtonHeight(context);
+    }
+    if (_showGroupCrumbLine(context)) {
+      height += CrumbLine.getPreferredHeight(textScaler);
+    }
+    if (_showQueryLine(context)) {
+      height += FilterQueryBar.getPreferredHeight(textScaler);
+    }
+    return height;
+  }
+
+  Widget? _buildAppBarLeading({required bool hasDrawer, required bool isSelecting}) {
+    if (settings.useTvLayout) return null;
+
+    if (!hasDrawer) {
+      return const CloseButton();
+    }
+
+    VoidCallback? onPressed;
+    String? tooltip;
+    if (isSelecting) {
+      onPressed = () => context.read<Selection<FilterGridItem<T>>>().browse();
+      tooltip = MaterialLocalizations.of(context).backButtonTooltip;
+    } else {
+      onPressed = Scaffold.of(context).openDrawer;
+      tooltip = MaterialLocalizations.of(context).openAppDrawerTooltip;
+    }
+    return IconButton(
+      // key is expected by test driver
+      key: const Key('appbar-leading-button'),
+      icon: AnimatedIcon(
+        icon: AnimatedIcons.menu_arrow,
+        progress: _browseToSelectAnimation,
+      ),
+      onPressed: onPressed,
+      tooltip: tooltip,
+    );
+  }
+
+  Widget _buildAppBarTitle(bool isSelecting) {
+    if (isSelecting) {
+      return Selector<Selection<FilterGridItem<T>>?, int>(
+        selector: (context, selection) => selection?.selectedItemCount ?? 0,
+        builder: (context, count, _) {
+          final l10n = context.l10n;
+          return FadingLine(count == 0 ? l10n.collectionSelectPageTitle : l10n.itemCount(count));
+        },
+      );
+    } else {
+      final appMode = context.watch<ValueNotifier<AppMode>>().value;
+      return InteractiveAppBarTitle(
+        onTap: appMode.canNavigate ? _goToSearch : null,
+        child: SourceStateAwareAppBarTitle(
+          title: Text(
+            widget.title,
+            softWrap: false,
+            overflow: .fade,
+            maxLines: 1,
+          ),
+          source: source,
+        ),
+      );
+    }
+  }
+
+  List<Widget> _buildActions(
+    BuildContext context,
+    AppMode appMode,
+    Selection<FilterGridItem<T>> selection,
+    CSAD actionDelegate,
+  ) {
+    final itemCount = actionDelegate.allItems.length;
+    final isSelecting = selection.isSelecting;
+    final selectedFilters = selection.selectedItems.map((v) => v.filter).toSet();
+
+    bool isVisible(ChipSetAction action) => actionDelegate.isVisible(
+      action,
+      appMode: appMode,
+      isSelecting: isSelecting,
+      itemCount: itemCount,
+      selectedFilters: selectedFilters,
+    );
+    bool canApply(ChipSetAction action) => actionDelegate.canApply(
+      action,
+      isSelecting: isSelecting,
+      itemCount: itemCount,
+      selectedFilters: selectedFilters,
+    );
+
+    return settings.useTvLayout
+        ? _buildTelevisionActions(
+            context: context,
+            selection: selection,
+            isVisible: isVisible,
+            canApply: canApply,
+            actionDelegate: actionDelegate,
+          )
+        : _buildMobileActions(
+            context: context,
+            selection: selection,
+            isVisible: isVisible,
+            canApply: canApply,
+            actionDelegate: actionDelegate,
+          );
+  }
+
+  List<Widget> _buildTelevisionActions({
+    required BuildContext context,
+    required Selection<FilterGridItem<T>> selection,
+    required bool Function(ChipSetAction action) isVisible,
+    required bool Function(ChipSetAction action) canApply,
+    required CSAD actionDelegate,
+  }) {
+    final isSelecting = selection.isSelecting;
+
+    return [
+      ...ChipSetActions.general,
+      ...isSelecting ? ChipSetActions.selection : ChipSetActions.browsing,
+    ].nonNulls.where(isVisible).map((action) {
+      final enabled = canApply(action);
+      return CaptionedButton(
+        iconButtonBuilder: (context, focusNode) => _buildButtonIcon(
+          context,
+          actionDelegate,
+          action,
+          enabled: enabled,
+          focusNode: focusNode,
+        ),
+        captionText: _buildButtonCaption(context, action, enabled: enabled),
+        onPressed: enabled ? () => _onActionSelected(context, action, actionDelegate) : null,
+      );
+    }).toList();
+  }
+
+  List<Widget> _buildMobileActions({
+    required BuildContext context,
+    required Selection<FilterGridItem<T>> selection,
+    required bool Function(ChipSetAction action) isVisible,
+    required bool Function(ChipSetAction action) canApply,
+    required CSAD actionDelegate,
+  }) {
+    final isSelecting = selection.isSelecting;
+
+    final quickActionButtons = (isSelecting ? selectionQuickActions : browsingQuickActions)
+        .where(isVisible)
+        .map(
+          (action) => _buildButtonIcon(context, actionDelegate, action, enabled: canApply(action)),
+        );
+
+    final animations = context.select<Settings, AccessibilityAnimations>((v) => v.accessibilityAnimations);
+    return [
+      ...quickActionButtons,
+      PopupMenuButton<ChipSetAction>(
+        itemBuilder: (context) {
+          final generalMenuItems = ChipSetActions.general
+              .where(isVisible)
+              .map(
+                (action) => FilterGridAppBar.toMenuItem(context, action, enabled: canApply(action)),
+              );
+
+          final browsingMenuActions = ChipSetActions.browsing.where((v) => !browsingQuickActions.contains(v));
+          final selectionMenuActions = ChipSetActions.selection.where((v) => !selectionQuickActions.contains(v));
+          final contextualMenuActions = (isSelecting ? selectionMenuActions : browsingMenuActions).where((v) => v == null || isVisible(v)).fold(<ChipSetAction?>[], (prev, v) {
+            if (v == null && (prev.isEmpty || prev.last == null)) return prev;
+            return [...prev, v];
+          });
+          if (contextualMenuActions.isNotEmpty && contextualMenuActions.last == null) {
+            contextualMenuActions.removeLast();
+          }
+
+          return [
+            ...generalMenuItems,
+            if (contextualMenuActions.isNotEmpty) ...[
+              const PopupMenuDivider(),
+              ...contextualMenuActions.map(
+                (action) {
+                  if (action == null) return const PopupMenuDivider();
+                  return FilterGridAppBar.toMenuItem(context, action, enabled: canApply(action));
+                },
+              ),
+            ],
+          ];
+        },
+        onSelected: (action) async {
+          // remove focus, if any, to prevent the keyboard from showing up
+          // after the user is done with the popup menu
+          FocusManager.instance.primaryFocus?.unfocus();
+
+          // wait for the popup menu to hide before proceeding with the action
+          await Future.delayed(animations.popUpAnimationDelay * timeDilation);
+          _onActionSelected(context, action, actionDelegate);
+        },
+        popUpAnimationStyle: animations.popUpAnimationStyle,
+      ),
+    ];
+  }
+
+  Widget _buildButtonIcon(
+    BuildContext context,
+    CSAD actionDelegate,
+    ChipSetAction action, {
+    required bool enabled,
+    FocusNode? focusNode,
+  }) {
+    final onPressed = enabled ? () => _onActionSelected(context, action, actionDelegate) : null;
+    switch (action) {
+      case .toggleTitleSearch:
+        // `Query` may not be available during hero
+        return Selector<Query?, bool>(
+          selector: (context, query) => query?.enabled ?? false,
+          builder: (context, queryEnabled, child) {
+            return TitleSearchToggler(
+              queryEnabled: queryEnabled,
+              focusNode: focusNode,
+              onPressed: onPressed,
+            );
+          },
+        );
+      default:
+        return IconButton(
+          icon: action.getIcon(),
+          onPressed: onPressed,
+          focusNode: focusNode,
+          tooltip: action.getText(context),
+        );
+    }
+  }
+
+  Widget _buildButtonCaption(
+    BuildContext context,
+    ChipSetAction action, {
+    required bool enabled,
+  }) {
+    switch (action) {
+      case .toggleTitleSearch:
+        return TitleSearchTogglerCaption(
+          enabled: enabled,
+        );
+      default:
+        return CaptionedButtonText(
+          text: action.getText(context),
+          enabled: enabled,
+        );
+    }
+  }
+
+  void _onActivityChanged() {
+    if (context.read<Selection<FilterGridItem<T>>>().isSelecting) {
+      _browseToSelectAnimation.forward();
+    } else {
+      _browseToSelectAnimation.reverse();
+    }
+  }
+
+  void _onQueryFocusRequest() => _queryBarFocusNode.requestFocus();
+
+  void _onQueryBarFocusChanged() {
+    if (_queryBarFocusNode.hasFocus) {
+      // the query bar is in the top sliver of the page scrollable,
+      // so when the bar text field gets focus and requests to be on screen,
+      // it will scroll to show it by default, but it may not end at the very top,
+      // so we do it manually for a more predicable end position
+      _scrollToTop();
+    }
+  }
+
+  void _scrollToTop() => widget.scrollController.jumpTo(0);
+
+  void _updateAppBarHeight() {
+    if (!mounted) return;
+    widget.appBarHeightNotifier.value = AvesAppBar.appBarHeightForContentHeight(_getAppBarContentHeight(context));
+  }
+
+  void _onActionSelected(BuildContext context, ChipSetAction action, ChipSetActionDelegate<T> actionDelegate) {
+    actionDelegate.onActionSelected(context, action);
+  }
+
+  void _goToSearch() {
+    Navigator.maybeOf(context)?.push(
+      CollectionSearchPageRoute(context: context),
+    );
+  }
+}

@@ -1,0 +1,884 @@
+{
+    "welcomeOptional": "Valgfritt",
+    "deleteButtonLabel": "SLETT",
+    "focalLength": "{length} mm",
+    "@focalLength": {
+        "placeholders": {
+            "length": {
+                "type": "String",
+                "example": "5.4"
+            }
+        }
+    },
+    "changeTooltip": "Endre",
+    "clearTooltip": "Tøm",
+    "previousTooltip": "Forrige",
+    "nextTooltip": "Neste",
+    "doNotAskAgain": "Ikke spør igjen",
+    "chipActionGoToAlbumPage": "Vis i album",
+    "chipActionGoToCountryPage": "Vis i land",
+    "chipActionGoToTagPage": "Vis i etiketter",
+    "doubleBackExitMessage": "Trykk «Tilbake» igjen for å avslutte.",
+    "chipActionUnpin": "Løsne fra toppen",
+    "chipActionRename": "Gi nytt navn",
+    "chipActionFilterOut": "Ekskluder",
+    "chipActionFilterIn": "Inkluder",
+    "entryActionCopyToClipboard": "Kopier til utklippstavle",
+    "entryActionRename": "Gi nytt navn",
+    "entryActionOpen": "Åpne med",
+    "entryActionSetAs": "Sett som",
+    "entryActionRotateCCW": "Roter mot klokken",
+    "entryActionRotateCW": "Roter med klokken",
+    "entryActionShare": "Del",
+    "entryActionViewSource": "Vis kilde",
+    "entryActionShowGeoTiffOnMap": "Vis som overlagskart",
+    "entryActionConvertMotionPhotoToStillImage": "Konverter til stillbilde",
+    "entryActionViewMotionPhotoVideo": "Åpne video",
+    "entryActionEdit": "Rediger",
+    "entryActionAddFavourite": "Legg til i favoritter",
+    "entryActionRemoveFavourite": "Fjern fra favoritter",
+    "videoActionMute": "Forstum",
+    "videoActionUnmute": "Opphev forstummelse",
+    "videoActionReplay10": "Blafre bakover 10 sekunder",
+    "videoActionSkip10": "Blafre forover 10 sekunder",
+    "videoActionSetSpeed": "Avspillingshastighet",
+    "viewerActionSettings": "Innstillinger",
+    "entryInfoActionEditTitleDescription": "Rediger navn og beskrivelse",
+    "filterNoDateLabel": "Udatert",
+    "filterNoLocationLabel": "Uten posisjon",
+    "filterNoRatingLabel": "Uvurdert",
+    "filterTypeRawLabel": "Raw",
+    "filterNoTagLabel": "Uten etiketter",
+    "filterNoTitleLabel": "Uten navn",
+    "filterOnThisDayLabel": "På denne dagen",
+    "filterRatingRejectedLabel": "Avslått",
+    "coordinateDmsNorth": "N",
+    "mapStyleGoogleHybrid": "Google Maps (hybrid)",
+    "mapStyleGoogleTerrain": "Google Maps (terreng)",
+    "coordinateDms": "{coordinate} {direction}",
+    "@coordinateDms": {
+        "placeholders": {
+            "coordinate": {
+                "type": "String",
+                "example": "38° 41′ 47.72″"
+            },
+            "direction": {
+                "type": "String",
+                "example": "S"
+            }
+        }
+    },
+    "mapStyleOsmHot": "Humanitært OSM",
+    "accessibilityAnimationsRemove": "Forhindre skjermeffekter",
+    "accessibilityAnimationsKeep": "Behold skjermeffekter",
+    "themeBrightnessDark": "Mørk",
+    "themeBrightnessLight": "Lys",
+    "viewerTransitionZoomIn": "Forstørr",
+    "storageVolumeDescriptionFallbackPrimary": "Internlagring",
+    "storageVolumeDescriptionFallbackNonPrimary": "SD-kort",
+    "rootDirectoryDescription": "rotmappe",
+    "widgetOpenPageCollection": "Åpne samling",
+    "nameConflictDialogMultipleSourceMessage": "Noen filer har samme navn.",
+    "videoResumeButtonLabel": "FORTSETT",
+    "renameEntrySetPageTitle": "Gi nytt navn",
+    "exportEntryDialogFormat": "Format:",
+    "editEntryDateDialogTitle": "Dato og tid",
+    "editEntryDateDialogSetCustom": "Sett egendefinert dato",
+    "editEntryDateDialogCopyField": "Kopier fra annen dato",
+    "editEntryLocationDialogLatitude": "Breddegrad",
+    "videoStreamSelectionDialogVideo": "Video",
+    "videoStreamSelectionDialogAudio": "Lyd",
+    "videoStreamSelectionDialogOff": "Av",
+    "genericSuccessFeedback": "Ferdig",
+    "genericFailureFeedback": "Mislykket",
+    "menuActionSelect": "Velg",
+    "menuActionSlideshow": "Lysbildevisning",
+    "menuActionStats": "Statistikk",
+    "appPickDialogNone": "Ingen",
+    "aboutPageTitle": "Om",
+    "aboutLinkLicense": "Lisens",
+    "aboutLinkPolicy": "Personvernspraksis",
+    "aboutCreditsWorldAtlas2": "under ISC-lisens.",
+    "aboutTranslatorsSectionTitle": "Oversettere",
+    "aboutLicensesSectionTitle": "Frie lisenser",
+    "policyPageTitle": "Personvernspraksis",
+    "aboutLicensesFlutterPackagesSectionTitle": "Flutter-pakker",
+    "aboutLicensesDartPackagesSectionTitle": "Dart-pakker",
+    "collectionActionShowTitleSearch": "Vis navnefilter",
+    "collectionActionHideTitleSearch": "Skjul navnefilter",
+    "collectionSearchTitlesHintText": "Søk etter navn",
+    "collectionGroupMonth": "Etter måned",
+    "collectionEmptyImages": "Ingen bilder",
+    "drawerAboutButton": "Om",
+    "drawerSettingsButton": "Innstillinger",
+    "drawerCollectionFavourites": "Favoritter",
+    "drawerCollectionAll": "Alle samlinger",
+    "sortOrderAtoZ": "A-Å",
+    "sortOrderZtoA": "Å-A",
+    "newFilterBanner": "ny",
+    "settingsNavigationSectionTitle": "Navigasjon",
+    "settingsHomeTile": "Hjem",
+    "settingsHomeDialogTitle": "Hjem",
+    "settingsDisabled": "Avskrudd",
+    "settingsSearchFieldLabel": "Søkeinnstillinger",
+    "settingsSearchEmpty": "Ingen samsvarende innstilling",
+    "settingsKeepScreenOnTile": "Behold skjermen påslått",
+    "settingsKeepScreenOnDialogTitle": "Behold skjermen påslått",
+    "settingsDoubleBackExit": "Trykk «Tilbake» to ganger for å avslutte",
+    "settingsNavigationDrawerTile": "Navigasjonsmeny",
+    "settingsNavigationDrawerEditorPageTitle": "Navigasjonsmeny",
+    "settingsNavigationDrawerTabAlbums": "Album",
+    "settingsNavigationDrawerTabPages": "Sider",
+    "settingsViewerQuickActionEditorPageTitle": "Hurtighandlinger",
+    "settingsViewerShowInformationSubtitle": "Vis navn, dato, posisjon, osv.",
+    "settingsViewerSlideshowPageTitle": "Lysbildevisning",
+    "settingsSlideshowAnimatedZoomEffect": "Animert forstørrelseseffekt",
+    "settingsSlideshowTransitionTile": "Overgang",
+    "settingsSlideshowVideoPlaybackTile": "Videoavspilling",
+    "settingsVideoPageTitle": "Videoinnstillinger",
+    "settingsVideoSectionTitle": "Video",
+    "settingsVideoEnableHardwareAcceleration": "Maskinvareakselerasjon",
+    "settingsVideoLoopModeTile": "Gjentagelsesmodus",
+    "settingsVideoLoopModeDialogTitle": "Gjentagelsesmodus",
+    "settingsSubtitleThemeTextAlignmentDialogTitle": "Tekstjustering",
+    "settingsSubtitleThemeTextColor": "Tekstfarge",
+    "settingsSubtitleThemeTextOpacity": "Tekst-dekkevne",
+    "settingsSubtitleThemeBackgroundColor": "Bakgrunnsfarge",
+    "settingsSubtitleThemeBackgroundOpacity": "Bakgrunnsdekkevne",
+    "settingsSubtitleThemeTextAlignmentRight": "Høyre",
+    "settingsVideoControlsTile": "Kontroller",
+    "settingsVideoGestureDoubleTapTogglePlay": "Dobbelttrykk for å spille/pause",
+    "settingsPrivacySectionTitle": "Personvern",
+    "settingsEnableBin": "Bruk papirkurv",
+    "settingsHiddenItemsTile": "Skjulte elementer",
+    "settingsHiddenItemsPageTitle": "Skjulte elementer",
+    "settingsRemoveAnimationsTile": "Fjern animasjoner",
+    "settingsDisplaySectionTitle": "Visning",
+    "settingsThemeBrightnessTile": "Drakt",
+    "settingsCoordinateFormatDialogTitle": "Koordinatformat",
+    "settingsUnitSystemTile": "Enheter",
+    "settingsScreenSaverPageTitle": "Skjermsparer",
+    "statsTopCountriesSectionTitle": "Toppland",
+    "statsTopPlacesSectionTitle": "Toppsteder",
+    "statsTopTagsSectionTitle": "Topp-etiketter",
+    "statsTopAlbumsSectionTitle": "Topp-album",
+    "viewerInfoLabelDescription": "Beskrivelse",
+    "viewerInfoLabelTitle": "Navn",
+    "viewerInfoLabelResolution": "Oppløsning",
+    "viewerInfoLabelSize": "Størrelse",
+    "viewerInfoLabelUri": "URI",
+    "viewerInfoLabelPath": "Sti",
+    "viewerInfoLabelDuration": "Varighet",
+    "viewerInfoLabelOwner": "Eier",
+    "viewerInfoLabelCoordinates": "Koordinater",
+    "viewerInfoLabelAddress": "Adresse",
+    "openMapPageTooltip": "Vis på kartsiden",
+    "viewerInfoOpenLinkText": "Åpne",
+    "viewerInfoViewXmlLinkText": "Vis XML",
+    "appName": "Aves",
+    "welcomeMessage": "Velkommen",
+    "welcomeTermsToggle": "Jeg samtykker til vilkår og betingelser",
+    "filterRecentlyAddedLabel": "Nylig tillagt",
+    "filterTypeAnimatedLabel": "Animert",
+    "nextButtonLabel": "NESTE",
+    "continueButtonLabel": "FORTSETT",
+    "sourceStateLoading": "Laster inn",
+    "chipActionCreateAlbum": "Opprett album",
+    "collectionGroupAlbum": "Etter album",
+    "showButtonLabel": "VIS",
+    "hideButtonLabel": "SKJUL",
+    "cancelTooltip": "Avbryt",
+    "showTooltip": "Vis",
+    "actionRemove": "Fjern",
+    "pickTooltip": "Velg",
+    "chipActionSetCover": "Sett omslag",
+    "hideTooltip": "Skjul",
+    "saveTooltip": "Lagre",
+    "resetTooltip": "Tilbakestill",
+    "chipActionDelete": "Slett",
+    "entryActionRotateScreen": "Roter skjerm",
+    "videoActionPlay": "Spill",
+    "entryInfoActionEditTags": "Rediger etiketter",
+    "entryInfoActionRemoveMetadata": "Fjern metadata",
+    "chipActionHide": "Skjul",
+    "chipActionPin": "Fest til toppen",
+    "entryActionDelete": "Slett",
+    "entryActionExport": "Eksporter",
+    "videoActionPause": "Pause",
+    "entryActionConvert": "Konverter",
+    "entryActionOpenMap": "Vis i kartprogram",
+    "entryActionInfo": "Info",
+    "entryActionRestore": "Gjenopprett",
+    "aboutBugSaveLogInstruction": "Lagre programlogger til fil",
+    "slideshowActionShowInCollection": "Vis i samling",
+    "sortOrderLargestFirst": "Største først",
+    "entryInfoActionEditDate": "Rediger dato og tid",
+    "entryInfoActionEditRating": "Rediger vurdering",
+    "filterTypePanoramaLabel": "Panorama",
+    "filterTypeMotionPhotoLabel": "Bevegelig bilde",
+    "filterMimeImageLabel": "Bilde",
+    "filterMimeVideoLabel": "Video",
+    "coordinateDmsWest": "V",
+    "filterTypeSphericalVideoLabel": "360°-video",
+    "filterTypeGeotiffLabel": "GeoTIFF",
+    "coordinateDmsSouth": "S",
+    "coordinateFormatDecimal": "Desimalgrader",
+    "coordinateDmsEast": "Ø",
+    "videoLoopModeNever": "Aldri",
+    "videoLoopModeAlways": "Alltid",
+    "keepScreenOnNever": "Aldri",
+    "albumTierRegular": "Andre",
+    "setCoverDialogAuto": "Auto",
+    "renameEntrySetPagePatternFieldLabel": "Navngivningsmønster",
+    "unitSystemMetric": "Metrisk",
+    "unitSystemImperial": "Engelske måleenheter",
+    "keepScreenOnAlways": "Alltid",
+    "wallpaperTargetLock": "Lås skjerm",
+    "albumTierApps": "Programmer",
+    "videoLoopModeShortOnly": "Kun korte videoer",
+    "videoControlsPlayOutside": "Åpne med annen avspiller",
+    "mapStyleGoogleNormal": "Google Maps",
+    "videoPlaybackSkip": "Hopp over",
+    "newAlbumDialogNameLabelAlreadyExistsHelper": "Mappen finnes allerede",
+    "themeBrightnessBlack": "Svart",
+    "albumTierNew": "Ny",
+    "albumTierPinned": "Festet",
+    "renameEntrySetPagePreviewSectionTitle": "Forhåndsvis",
+    "renameProcessorCounter": "Teller",
+    "viewerTransitionNone": "Ingen",
+    "wallpaperTargetHome": "Hjemmeskjerm",
+    "wallpaperTargetHomeLock": "Hjem- og låseskjermer",
+    "otherDirectoryDescription": "«{name}»-mappen",
+    "@otherDirectoryDescription": {
+        "placeholders": {
+            "name": {
+                "type": "String",
+                "example": "Pictures",
+                "description": "the name of a specific directory"
+            }
+        }
+    },
+    "addShortcutDialogLabel": "Snarveisetikett",
+    "setCoverDialogCustom": "Egendefinert",
+    "newAlbumDialogTitle": "Nytt album",
+    "addShortcutButtonLabel": "LEGG TIL",
+    "newAlbumDialogNameLabel": "Albumsnavn",
+    "newAlbumDialogStorageLabel": "Lagring:",
+    "durationDialogSeconds": "Sekunder",
+    "removeEntryMetadataDialogMore": "Mer",
+    "menuActionSelectAll": "Velg alle",
+    "appPickDialogTitle": "Velg program",
+    "renameEntrySetPageInsertTooltip": "Sett inn felt",
+    "exportEntryDialogWidth": "Bredde",
+    "renameEntryDialogLabel": "Nytt navn",
+    "collectionActionMove": "Flytt til album",
+    "renameAlbumDialogLabel": "Nytt navn",
+    "renameAlbumDialogLabelAlreadyExistsHelper": "Mappen finnes allerede",
+    "renameProcessorName": "Navn",
+    "editEntryLocationDialogLongitude": "Lengdegrad",
+    "exportEntryDialogHeight": "Høyde",
+    "collectionActionRescan": "Skann igjen",
+    "sortOrderSmallestFirst": "Minste først",
+    "editEntryDialogTargetFieldsHeader": "Felter å endre",
+    "editEntryDialogCopyFromItem": "Kopier fra annet element",
+    "durationDialogMinutes": "Minutter",
+    "editEntryLocationDialogChooseOnMap": "Velg på kartet",
+    "editEntryRatingDialogTitle": "Vurdering",
+    "removeEntryMetadataDialogTitle": "Metadatafjerning",
+    "genericDangerWarningDialogMessage": "Er du sikker?",
+    "videoSpeedDialogLabel": "Avspillingshastighet",
+    "menuActionConfigureView": "Vis",
+    "menuActionMap": "Kart",
+    "viewDialogGroupSectionTitle": "Gruppe",
+    "tileLayoutList": "Liste",
+    "collectionPickPageTitle": "Velg",
+    "menuActionSelectNone": "Fravelg alt",
+    "coverDialogTabCover": "Omslag",
+    "coverDialogTabApp": "Program",
+    "collectionEmptyFavourites": "Ingen favoritter",
+    "viewDialogSortSectionTitle": "Sortering",
+    "tileLayoutGrid": "Rutenett",
+    "coverDialogTabColor": "Farge",
+    "aboutBugSectionTitle": "Feilrapport",
+    "aboutBugReportButton": "Rapporter",
+    "aboutCreditsWorldAtlas1": "Dette programmet bruker en TopoJSON-fil fra",
+    "collectionPageTitle": "Samling",
+    "aboutCreditsSectionTitle": "Bidragsytere",
+    "aboutLicensesShowAllButtonLabel": "Vis alle lisenser",
+    "collectionActionAddShortcut": "Legg til snarvei",
+    "dateToday": "I dag",
+    "searchDateSectionTitle": "Dato",
+    "collectionSelectPageTitle": "Velg elementer",
+    "collectionActionEmptyBin": "Tøm papirkurv",
+    "collectionActionCopy": "Kopier til album",
+    "dateYesterday": "I går",
+    "drawerCollectionImages": "Bilder",
+    "collectionActionEdit": "Rediger",
+    "collectionGroupDay": "Etter dag",
+    "dateThisMonth": "Denne måneden",
+    "drawerCollectionAnimated": "Animert",
+    "drawerCollectionSphericalVideos": "360°-videoer",
+    "sortByDate": "Etter dato",
+    "sectionUnknown": "Ukjent",
+    "collectionEmptyVideos": "Ingen videoer",
+    "drawerCountryPage": "Land",
+    "collectionEmptyGrantAccessButtonLabel": "Innvilg tilgang",
+    "drawerCollectionVideos": "Videoer",
+    "drawerTagPage": "Etiketter",
+    "drawerCollectionMotionPhotos": "Bevegelige bilder",
+    "drawerCollectionRaws": "Raw bilder",
+    "drawerAlbumPage": "Album",
+    "sortOrderHighestFirst": "Høyeste først",
+    "sortOrderLowestFirst": "Laveste først",
+    "countryEmpty": "Ingen land",
+    "drawerCollectionPanoramas": "Panoramaer",
+    "searchRecentSectionTitle": "Nylige",
+    "sourceViewerPageTitle": "Kilde",
+    "sortByName": "Etter navn",
+    "sortByItemCount": "Etter antall elementer",
+    "sortBySize": "Etter størrelse",
+    "sortByAlbumFileName": "Etter album og filnavn",
+    "sortByRating": "Etter vurdering",
+    "sortOrderNewestFirst": "Nyeste først",
+    "sortOrderOldestFirst": "Eldste først",
+    "albumCamera": "Kamera",
+    "albumScreenshots": "Skjermavbildninger",
+    "albumPageTitle": "Album",
+    "tagPageTitle": "Etiketter",
+    "settingsViewerShowInformation": "Vis info",
+    "albumGroupType": "Etter type",
+    "albumGroupVolume": "Etter lagringsdataområde",
+    "albumMimeTypeMixed": "Blandet",
+    "albumPickPageTitleCopy": "Kopier til album",
+    "albumPickPageTitlePick": "Velg album",
+    "albumDownload": "Last ned",
+    "createAlbumButtonLabel": "OPPRETT",
+    "searchRatingSectionTitle": "Vurderinger",
+    "settingsSystemDefault": "Systemforvalg",
+    "albumPickPageTitleExport": "Eksporter til album",
+    "albumPickPageTitleMove": "Flytt til album",
+    "albumScreenRecordings": "Skjermopptak",
+    "albumVideoCaptures": "Videoopptak",
+    "albumEmpty": "Ingen album",
+    "binPageTitle": "Papirkurv",
+    "countryPageTitle": "Land",
+    "tagEmpty": "Ingen etiketter",
+    "searchAlbumsSectionTitle": "Album",
+    "searchMetadataSectionTitle": "Metadata",
+    "settingsPageTitle": "Innstillinger",
+    "settingsActionExportDialogTitle": "Eksporter",
+    "searchCollectionFieldHint": "Søk i samling",
+    "searchCountriesSectionTitle": "Land",
+    "settingsDefault": "Forvalg",
+    "settingsActionExport": "Eksporter",
+    "settingsActionImport": "Importer",
+    "settingsActionImportDialogTitle": "Importer",
+    "searchPlacesSectionTitle": "Steder",
+    "searchTagsSectionTitle": "Etiketter",
+    "appExportCovers": "Omslag",
+    "appExportFavourites": "Favoritter",
+    "appExportSettings": "Innstillinger",
+    "settingsConfirmationDialogTitle": "Bekreftelsesdialoger",
+    "settingsConfirmationTile": "Bekreftelsesdialoger",
+    "settingsThumbnailSectionTitle": "Miniatyrbilder",
+    "timeMinutes": "{count, plural, =1{{count} minutt} other{{count} minutter}}",
+    "@timeMinutes": {
+        "placeholders": {
+            "minutes": {}
+        }
+    },
+    "timeDays": "{count, plural, =1{{count} dag} other{{count} dager}}",
+    "@timeDays": {
+        "placeholders": {
+            "days": {}
+        }
+    },
+    "itemCount": "{count, plural, =1{{count} element} other{{count} elementer}}",
+    "@itemCount": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "timeSeconds": "{count, plural, =1{{count} sekund} other{{count} sekunder}}",
+    "@timeSeconds": {
+        "placeholders": {
+            "seconds": {}
+        }
+    },
+    "applyButtonLabel": "BRUK",
+    "sourceStateCataloguing": "Katalogisering",
+    "entryActionPrint": "Skriv ut",
+    "filterFavouriteLabel": "Favorittmerk",
+    "filterBinLabel": "Papirkurv",
+    "nameConflictStrategyRename": "Gi nytt navn",
+    "nameConflictStrategyReplace": "Erstatt",
+    "nameConflictStrategySkip": "Hopp over",
+    "videoPlaybackWithSound": "Spill med lyd",
+    "videoPlaybackMuted": "Spill forstummet",
+    "videoStartOverButtonLabel": "START OM IGJEN",
+    "noMatchingAppDialogMessage": "Ingen programmer kan håndtere dette.",
+    "videoResumeDialogMessage": "Fortsett avspilling fra {time}?",
+    "@videoResumeDialogMessage": {
+        "placeholders": {
+            "time": {
+                "type": "String",
+                "example": "13:37"
+            }
+        }
+    },
+    "settingsNavigationDrawerTabTypes": "Typer",
+    "settingsNavigationDrawerAddAlbum": "Legg til album",
+    "settingsViewerQuickActionsTile": "Hurtighandlinger",
+    "tagEditorPageTitle": "Rediger etiketter",
+    "settingsViewerShowMinimap": "Vis minikart",
+    "settingsSubtitleThemePageTitle": "Undertekster",
+    "settingsUnitSystemDialogTitle": "Enheter",
+    "settingsViewerShowOverlayThumbnails": "Vis miniatyrbilder",
+    "settingsSlideshowFillScreen": "Fyll skjermen",
+    "settingsVideoShowVideos": "Vis videoer",
+    "settingsViewerSlideshowTile": "Lysbildevisning",
+    "settingsSlideshowVideoPlaybackDialogTitle": "Videoavspilling",
+    "settingsVideoAutoPlay": "Automatisk avspilling",
+    "settingsSubtitleThemeTextSize": "Tekststørrelse",
+    "settingsVideoButtonsTile": "Knapper",
+    "settingsSlideshowRepeat": "Gjenta",
+    "settingsSlideshowIntervalTile": "Intervall",
+    "settingsSubtitleThemeTile": "Undertekster",
+    "settingsSubtitleThemeTextAlignmentTile": "Tekstjustering",
+    "settingsSubtitleThemeTextAlignmentLeft": "Venstre",
+    "settingsSubtitleThemeTextAlignmentCenter": "Midten",
+    "settingsVideoControlsPageTitle": "Kontroller",
+    "settingsThemeEnableDynamicColor": "Dynamisk farge",
+    "mapZoomOutTooltip": "Forminsk",
+    "viewerInfoPageTitle": "Info",
+    "settingsSaveSearchHistory": "Lagre søkehistorikk",
+    "settingsEnableBinSubtitle": "Behold slettede elementer i 30 dager",
+    "settingsAccessibilitySectionTitle": "Tilgjengelighet",
+    "tagEditorPageNewTagFieldLabel": "Ny etikett",
+    "settingsRemoveAnimationsDialogTitle": "Fjern animasjoner",
+    "settingsLanguageTile": "Språk",
+    "settingsLanguagePageTitle": "Språk",
+    "viewerInfoUnknown": "ukjent",
+    "settingsThemeBrightnessDialogTitle": "Drakt",
+    "settingsCoordinateFormatTile": "Koordinatformat",
+    "settingsCollectionTile": "Samling",
+    "statsPageTitle": "Statistikk",
+    "viewerInfoLabelDate": "Dato",
+    "mapStyleDialogTitle": "Kartstil",
+    "mapStyleTooltip": "Velg kartstil",
+    "mapZoomInTooltip": "Forstørr",
+    "mapPointNorthUpTooltip": "Nord oppover",
+    "viewerInfoSearchSuggestionDescription": "Beskrivelse",
+    "viewerInfoSearchFieldLabel": "Søk metadata",
+    "viewerInfoSearchSuggestionDate": "Dato og tid",
+    "viewerInfoSearchSuggestionDimensions": "Dimensjoner",
+    "tagEditorSectionRecent": "Nylig",
+    "viewerInfoSearchSuggestionResolution": "Oppløsning",
+    "viewerInfoSearchSuggestionRights": "Rettigheter",
+    "tagEditorPageAddTagTooltip": "Legg til etikett",
+    "sourceStateLocatingCountries": "Lokalisering av land",
+    "sourceStateLocatingPlaces": "Lokalisering av steder",
+    "entryActionFlip": "Vend vannrett",
+    "slideshowActionResume": "Fortsett",
+    "displayRefreshRatePreferHighest": "Høyeste takt",
+    "displayRefreshRatePreferLowest": "Laveste takt",
+    "viewerTransitionSlide": "Glidende",
+    "viewerTransitionParallax": "Parallakse",
+    "widgetOpenPageHome": "Åpne startside",
+    "widgetOpenPageViewer": "Åpne visning",
+    "durationDialogHours": "Timer",
+    "aboutLicensesBanner": "Programmet bruker følgende frie pakker og bibliotek.",
+    "aboutLicensesAndroidLibrariesSectionTitle": "Android-bibliotek",
+    "aboutLicensesFlutterPluginsSectionTitle": "Flutter-programtillegg",
+    "aboutBugReportInstruction": "Innrapporter på GitHub med loggføring og systeminfo",
+    "settingsSubtitleThemeShowOutline": "Vis omriss og skygge",
+    "settingsVideoGestureSideDoubleTapSeek": "Dobbelttrykk på skjermkantene for å blafre forover/bakover",
+    "settingsAllowInstalledAppAccessSubtitle": "Brukt til forbedring av albumsvisning",
+    "settingsAllowErrorReporting": "Tillat anonym feilrapportering",
+    "settingsStorageAccessPageTitle": "Lagringstilgang",
+    "settingsStorageAccessRevokeTooltip": "Tilbakekall",
+    "settingsLanguageSectionTitle": "Språk og formater",
+    "settingsWidgetPageTitle": "Bilderamme",
+    "settingsWidgetShowOutline": "Omriss",
+    "settingsWidgetOpenPage": "Når miniprogrammet trykkes",
+    "viewerOpenPanoramaButtonLabel": "ÅPNE PANORAMA",
+    "viewerSetWallpaperButtonLabel": "SETT SOM BAKGRUNNSBILDE",
+    "viewerErrorUnknown": "Oida.",
+    "viewerInfoBackToViewerTooltip": "Tilbake til visning",
+    "mapAttributionOsmHot": "Flis av [HOT](https://www.hotosm.org) • Vertstjent av [OSM France](https://openstreetmap.fr)",
+    "panoramaEnableSensorControl": "Skru på sensorstyring",
+    "panoramaDisableSensorControl": "Skru av sensorstyring",
+    "nameConflictDialogSingleSourceMessage": "Noen filer i målmappen har samme navn.",
+    "subtitlePositionTop": "Topp",
+    "subtitlePositionBottom": "Bunn",
+    "settingsSlideshowShuffle": "Stokk",
+    "statsWithGps": "{count, plural, =1{1 element med plassering} other{{count} elementer med plassering}}",
+    "@statsWithGps": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsMotionPhotoAutoPlay": "Auto-spill bevegelige bilder",
+    "settingsViewerQuickActionEditorBanner": "Trykk og hold for å flytte knapper og velg hvilke handlinger som vises i viseren.",
+    "editEntryDateDialogSourceFileModifiedDate": "Filendringsdato",
+    "settingsCollectionQuickActionEditorPageTitle": "Hurtighandlinger",
+    "widgetDisplayedItemRandom": "Tilfeldig",
+    "videoActionSelectStreams": "Velg spor",
+    "settingsDisplayRefreshRateModeDialogTitle": "Oppfriskningstakt",
+    "tileLayoutMosaic": "Mosaikk",
+    "settingsViewerSectionTitle": "Viser",
+    "widgetDisplayedItemMostRecent": "Nyligst",
+    "editEntryDateDialogExtractFromTitle": "Utled fra navn",
+    "viewDialogLayoutSectionTitle": "Tilpasning",
+    "videoActionCaptureFrame": "Fang ramme",
+    "albumGroupTier": "Etter nivå",
+    "editEntryLocationDialogSetCustom": "Sett egendefinert plassering",
+    "collectionCopySuccessFeedback": "{count, plural, =1{Kopierte 1 element} other{Kopierte {count} elementer}}",
+    "@collectionCopySuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsThumbnailShowLocationIcon": "Vis plasserings-ikon",
+    "entryInfoActionEditLocation": "Rediger plassering",
+    "editEntryDateDialogShift": "Bytt",
+    "locationPickerUseThisLocationButton": "Bruk denne plasseringen",
+    "removeEntryMetadataMotionPhotoXmpWarningDialogMessage": "XMP kreves for å spille videoen inne i et bevegelig bilde.\n\nEr du sikker på at du vil fjerne det?",
+    "settingsNavigationDrawerBanner": "Trykk og hold for å flytte og endre rekkefølge på menyelementer.",
+    "settingsViewerShowOverlayOnOpening": "Vis ved åpning",
+    "settingsViewerEnableOverlayBlurEffect": "Tilsløringseffekt",
+    "settingsDisplayRefreshRateModeTile": "Visningsoppfiskningstakt",
+    "videoStreamSelectionDialogTrack": "Spor",
+    "collectionCopyFailureFeedback": "{count, plural, =1{Klarte ikke å kopiere 1 element} other{Klarte ikke å kopiere {count} elementer}}",
+    "@collectionCopyFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionMoveFailureFeedback": "{count, plural, =1{Klarte ikke å flytte 1 element} other{Klarte ikke å flytte {count} elementer}}",
+    "@collectionMoveFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsThumbnailShowFavouriteIcon": "Vis favoritt-ikon",
+    "settingsThumbnailShowTagIcon": "Vis etikett-ikon",
+    "settingsThumbnailOverlayTile": "Overlag",
+    "settingsThumbnailOverlayPageTitle": "Overlag",
+    "settingsViewerQuickActionEditorAvailableButtonsSectionTitle": "Tilgjengelige knapper",
+    "settingsViewerQuickActionEditorDisplayedButtonsSectionTitle": "Viste knapper",
+    "filterNoAddressLabel": "Ingen adresse",
+    "missingSystemFilePickerDialogMessage": "Systemfilvelgeren mangler eller er avskrudd. Skru den på igjen og prøv igjen.",
+    "setCoverDialogLatest": "Nyeste element",
+    "hideFilterConfirmationDialogMessage": "Samsvarende bilder og videoer vil bli skjult fra samlingen din? Du kan vise dem igjen fra «Personvern»-innstillingene.\n\nEr du sikker på at du vil skjule dem?",
+    "collectionDeleteFailureFeedback": "{count, plural, =1{Klarte ikke å fjerne 1 element} other{Klarte ikke å fjerne {count} elementer}}",
+    "@collectionDeleteFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionMoveSuccessFeedback": "{count, plural, =1{Flyttet 1 element} other{Flyttet {count} elementer}}",
+    "@collectionMoveSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionExportFailureFeedback": "{count, plural, =1{Klarte ikke å eksportere 1 side} other{Klarte ikke å eksportere {count} sider}}",
+    "@collectionExportFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionSelectSectionTooltip": "Velg utvalg",
+    "settingsConfirmationBeforeMoveToBinItems": "Spør før flytting av elementer til papirkurven",
+    "settingsConfirmationAfterMoveToBinItems": "Vis melding etter flytting av elementer til papirkurven",
+    "settingsCollectionQuickActionTabBrowsing": "Utforskning",
+    "settingsStorageAccessBanner": "Noen mapper krever eksplisitt tilgang til å endre filene i dem. Du kan gjennomse hvilke mapper du har gitt tilgang til tidligere her.",
+    "settingsStorageAccessEmpty": "Ingen tilgangsinnvilgelser",
+    "settingsTimeToTakeActionTile": "Tid for handling",
+    "viewerErrorDoesNotExist": "Filen finnes ikke lenger.",
+    "tagPlaceholderPlace": "Sted",
+    "settingsViewerShowRatingTags": "Vis vurdering og etiketter",
+    "settingsViewerShowShootingDetails": "Vis knipsingsdetaljer",
+    "viewerInfoSearchEmpty": "Ingen samsvarende nøkler",
+    "tagEditorSectionPlaceholders": "Plassholdere",
+    "tagPlaceholderCountry": "Land",
+    "viewerTransitionFade": "Ton ut",
+    "unsupportedTypeDialogMessage": "{count, plural, =1{Denne operasjonen støttes ikke for elementer av følgende type: {types}.} other{Denne operasjonen støttes ikke for elementer av følgende typer: {types}.}}",
+    "@unsupportedTypeDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            },
+            "types": {
+                "type": "String",
+                "example": "GIF, TIFF, MP4",
+                "description": "a list of unsupported types"
+            }
+        }
+    },
+    "binEntriesConfirmationDialogMessage": "{count, plural, =1{Flytt dette elementet til papirkurven?} other{Flytt disse {count} elementene til papirkurven?}}",
+    "@binEntriesConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "deleteEntriesConfirmationDialogMessage": "{count, plural, =1{Slett dette elementet?} other{Slett disse {count} elementene?}}",
+    "@deleteEntriesConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "videoStreamSelectionDialogText": "Undertekster",
+    "collectionDeselectSectionTooltip": "Fravelg utvalg",
+    "collectionRenameFailureFeedback": "{count, plural, =1{Klarte ikke å endre navn på 1 element} other{Klarte ikke å endre navn på {count} elementer}}",
+    "@collectionRenameFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionEditFailureFeedback": "{count, plural, =1{Klarte ikke å redigere 1 element} other{Klarte ikke å redigere {count} elementer}}",
+    "@collectionEditFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsThumbnailShowMotionPhotoIcon": "Vis bevegelig bilde -ikon",
+    "settingsViewerQuickActionEmpty": "Ingen knapper",
+    "settingsThumbnailShowRating": "Vis vurdering",
+    "settingsThumbnailShowRawIcon": "Vis raw-ikon",
+    "settingsThumbnailShowVideoDuration": "Vis videovarighet",
+    "settingsViewerOverlayPageTitle": "Overlag",
+    "settingsViewerGestureSideTapNext": "Trykk på skjermkantene for å vise forrige/neste element",
+    "settingsViewerOverlayTile": "Overlag",
+    "settingsCollectionSelectionQuickActionEditorBanner": "Trykk og hold for å flytte knapper og velge hvilke handlinger som vises når du velger elementer.",
+    "settingsSubtitleThemeTextPositionTile": "Tekstposisjon",
+    "settingsHiddenFiltersEmpty": "Ingen skjulte filtre",
+    "settingsStorageAccessTile": "Lagringstilgang",
+    "settingsWidgetDisplayedItem": "Vist element",
+    "settingsThemeColorHighlights": "Fargede framhevelser",
+    "viewerInfoOpenEmbeddedFailureFeedback": "Klarte ikke å pakke ut innebygd data",
+    "mapEmptyRegion": "Ingen bilder i denne regionen",
+    "settingsConfirmationBeforeDeleteItems": "Spør før permanent sletting av elementer",
+    "settingsCollectionQuickActionTabSelecting": "Utvelgelse",
+    "coordinateFormatDms": "G-M-S",
+    "settingsCollectionBrowsingQuickActionEditorBanner": "Trykk og hold for å flytte knapper og velge hvilke handlinger som skal vises ved utforskning av elementer.",
+    "mapAttributionStamen": "Flis av [Stamen Design](https://stamen.com), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0)",
+    "restrictedAccessDialogMessage": "Dette kartet kan ikke endre filer i {directory} for «{volume}».\n\nBruk en pre-installert filbehandler eller et galleriprogram for å flytte elementene til en annen mappe.",
+    "@restrictedAccessDialogMessage": {
+        "placeholders": {
+            "directory": {
+                "type": "String",
+                "description": "the name of a directory, using the output of `rootDirectoryDescription` or `otherDirectoryDescription`"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "settingsAllowMediaManagement": "Tillat mediahåndtering",
+    "collectionRenameSuccessFeedback": "{count, plural, =1{Endret navn på 1 element} other{Endret navn på {count} elementer}}",
+    "@collectionRenameSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "deleteSingleAlbumConfirmationDialogMessage": "{count, plural, =1{Slett dette albumet og elementet i det?} other{Slett dette albumet og de {count} elementene i det?}}",
+    "@deleteSingleAlbumConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsHiddenFiltersBanner": "Bilder og videoer som samsvarer med skjulte filtre vil ikke vises i samlingen din.",
+    "collectionEditSuccessFeedback": "{count, plural, =1{Redigerte 1 element} other{Redigerte {count} elementer}}",
+    "@collectionEditSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "deleteMultiAlbumConfirmationDialogMessage": "{count, plural, =1{Slett disse albumene og elementet i demt?} other{Slett disse albumene og de {count} elementene i dem?}}",
+    "@deleteMultiAlbumConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "filterAspectRatioLandscapeLabel": "Liggende",
+    "filterAspectRatioPortraitLabel": "Stående",
+    "settingsSubtitleThemeSample": "Dette er et eksempel.",
+    "settingsSubtitleThemeTextPositionDialogTitle": "Tekstposisjon",
+    "wallpaperUseScrollEffect": "Bruk rulleeffekt på hjemmeskjerm",
+    "storageAccessDialogMessage": "Velg {directory} for «{volume}» i neste skjerm for å gi dette programmet tilgang til det.",
+    "@storageAccessDialogMessage": {
+        "placeholders": {
+            "directory": {
+                "type": "String",
+                "description": "the name of a directory, using the output of `rootDirectoryDescription` or `otherDirectoryDescription`"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "notEnoughSpaceDialogMessage": "Denne operasjonen trenger {neededSize} ledig plass på «{volume}» for å fullføres, men det er kun {freeSize} igjen.",
+    "@notEnoughSpaceDialogMessage": {
+        "placeholders": {
+            "neededSize": {
+                "type": "String",
+                "example": "314 MB"
+            },
+            "freeSize": {
+                "type": "String",
+                "example": "123 MB"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "settingsAllowInstalledAppAccess": "Tillat tilgang til programliste",
+    "videoStreamSelectionDialogNoSelection": "Det er ingen andre spor.",
+    "settingsCollectionQuickActionsTile": "Hurtighandlinger",
+    "settingsViewerUseCutout": "Bruk utklippsområde",
+    "settingsViewerMaximumBrightness": "Maksimal lysstyrke",
+    "settingsImageBackground": "Bildebakgrunn",
+    "viewDialogReverseSortOrder": "Omvendt sorteringsrekkefølge",
+    "mapStyleStamenWatercolor": "Stamen Watercolor (akvarell)",
+    "keepScreenOnViewerOnly": "Kun visningsside",
+    "entryInfoActionExportMetadata": "Eksporter metadata",
+    "albumTierSpecial": "Ofte åpnet",
+    "editEntryLocationDialogTitle": "Plassering",
+    "filterLocatedLabel": "Posisjonert",
+    "filterTaggedLabel": "Etikettmerket",
+    "settingsDisplayUseTvInterface": "Android TV-grensesnitt",
+    "settingsAccessibilityShowPinchGestureAlternatives": "Vis multi-trykkhåndvendingsalternativer",
+    "columnCount": "{count, plural, =1{{count} kolonne} other{{count} kolonner}}",
+    "@columnCount": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "keepScreenOnVideoPlayback": "Under videoavspilling",
+    "entryActionShareImageOnly": "Del kun bilde",
+    "entryActionShareVideoOnly": "Del kun video",
+    "entryInfoActionRemoveLocation": "Fjern posisjon",
+    "settingsViewerShowDescription": "Vis beskrivelse",
+    "settingsModificationWarningDialogMessage": "Andre innstillinger vil bli endret.",
+    "tooManyItemsErrorDialogMessage": "Prøv igjen med færre elementer.",
+    "settingsVideoGestureVerticalDragBrightnessVolume": "Dra opp eller ned for å justere lys-/lydstyrke",
+    "settingsDisablingBinWarningDialogMessage": "Elementer i papirkurven vil bli slettet for godt.",
+    "chipActionLock": "Lås",
+    "chipActionGoToPlacePage": "Vis i «Steder»",
+    "chipActionCreateVault": "Opprett hvelv",
+    "chipActionConfigureVault": "Sett opp hvelv",
+    "albumTierVaults": "Hvelv",
+    "lengthUnitPixel": "px",
+    "newVaultDialogTitle": "Nytt hvelv",
+    "configureVaultDialogTitle": "Sett opp hvelv",
+    "pinDialogEnter": "Skriv inn PIN",
+    "pinDialogConfirm": "Bekreft PIN",
+    "passwordDialogEnter": "Skriv inn passord",
+    "passwordDialogConfirm": "Bekreft passord",
+    "authenticateToConfigureVault": "Identitetsbekreft for å sette opp hvelv",
+    "authenticateToUnlockVault": "Identitetsbekreft for å låse opp hvelv",
+    "vaultBinUsageDialogMessage": "Noen hvelv bruker papirkurven.",
+    "newVaultWarningDialogMessage": "Elementer i hvelv er kun tilgjengelig for dette programmet, og ikke andre.\n\nHvis du avinstallerer dette programmet, eller tømmer denne programdataen vil du miste alle disse elementene.",
+    "drawerPlacePage": "Steder",
+    "vaultLockTypePin": "PIN",
+    "vaultLockTypePassword": "Passord",
+    "exportEntryDialogWriteMetadata": "Skriv metadata",
+    "placeEmpty": "Ingen steder",
+    "vaultDialogLockModeWhenScreenOff": "Lås når skjermen skrur seg av",
+    "vaultDialogLockTypeLabel": "Låsetype",
+    "placePageTitle": "Steder",
+    "settingsConfirmationVaultDataLoss": "Vis advarsel om hvelv-datatap",
+    "lengthUnitPercent": "%",
+    "editorTransformCrop": "Beskjær",
+    "editorTransformRotate": "Roter",
+    "statePageTitle": "Tilstander",
+    "stateEmpty": "Ingen tilstander",
+    "settingsVideoPlaybackTile": "Avspilling",
+    "settingsVideoResumptionModeTile": "Gjenoppta avspilling",
+    "settingsVideoResumptionModeDialogTitle": "Gjenoppta avspilling",
+    "maxBrightnessAlways": "Alltid",
+    "videoResumptionModeNever": "Aldri",
+    "maxBrightnessNever": "Aldri",
+    "videoResumptionModeAlways": "Alltid",
+    "exportEntryDialogQuality": "Kvalitet",
+    "aboutDataUsageSectionTitle": "Databruk",
+    "aboutDataUsageData": "Data",
+    "aboutDataUsageMisc": "Ymse",
+    "settingsVideoPlaybackPageTitle": "Avspilling",
+    "settingsVideoBackgroundMode": "Bakgrunnsmodus",
+    "saveCopyButtonLabel": "Lagre kopi",
+    "applyTooltip": "Bruk",
+    "overlayHistogramRGB": "RGB",
+    "patternDialogConfirm": "Bekreft mønster",
+    "aboutDataUsageCache": "Hurtiglager",
+    "aboutDataUsageDatabase": "Database",
+    "settingsAskEverytime": "Spør hver gang",
+    "settingsVideoBackgroundModeDialogTitle": "Bakgrunnsmodus",
+    "tagEditorDiscardDialogMessage": "Forkast endringer?",
+    "tagPlaceholderState": "Tilstand",
+    "chipActionShowCountryStates": "Vis tilstander",
+    "searchStatesSectionTitle": "Tilstander",
+    "vaultLockTypePattern": "Mønster",
+    "chipActionShowCollection": "Vis i samling",
+    "mapAttributionOsmData": "Kartdata © [OpenStreetMap](https://www.openstreetmap.org/copyright)-bidragsyterne"
+}

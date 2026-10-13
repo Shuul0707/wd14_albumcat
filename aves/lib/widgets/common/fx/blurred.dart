@@ -1,0 +1,94 @@
+import 'dart:ui';
+
+import 'package:material_ui/material_ui.dart';
+
+const _blurConfig = ImageFilterConfig.blur(sigmaX: 4, sigmaY: 4);
+// do not use `ColorFilter.matrix` for identity,
+// as it yields performance issues when there are other layers on top
+final _identity = ImageFilter.matrix(Matrix4.identity().storage);
+
+class BlurredRect extends StatelessWidget {
+  final bool enabled;
+  final Widget child;
+
+  const new({
+    super.key,
+    this.enabled = true,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter.grouped(
+        // do not modify tree when disabling filter
+        filter: enabled ? null : _identity,
+        filterConfig: enabled ? _blurConfig : null,
+        child: child,
+      ),
+    );
+  }
+}
+
+class BlurredRRect extends StatelessWidget {
+  final bool enabled;
+  final BorderRadius? borderRadius;
+  final Widget child;
+
+  const new({
+    super.key,
+    this.enabled = true,
+    required this.borderRadius,
+    required this.child,
+  });
+
+  factory all({
+    Key? key,
+    bool enabled = true,
+    required double borderRadius,
+    required Widget child,
+  }) {
+    return BlurredRRect(
+      key: key,
+      enabled: enabled,
+      borderRadius: BorderRadius.all(Radius.circular(borderRadius)),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.zero,
+      child: BackdropFilter.grouped(
+        // do not modify tree when disabling filter
+        filter: enabled ? null : _identity,
+        filterConfig: enabled ? _blurConfig : null,
+        child: child,
+      ),
+    );
+  }
+}
+
+class BlurredOval extends StatelessWidget {
+  final bool enabled;
+  final Widget child;
+
+  const new({
+    super.key,
+    this.enabled = true,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: BackdropFilter.grouped(
+        // do not modify tree when disabling filter
+        filter: enabled ? null : _identity,
+        filterConfig: enabled ? _blurConfig : null,
+        child: child,
+      ),
+    );
+  }
+}

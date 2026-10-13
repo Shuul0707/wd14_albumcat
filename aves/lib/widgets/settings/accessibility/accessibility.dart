@@ -1,0 +1,80 @@
+import 'dart:async';
+
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/theme/colors.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/settings/accessibility/time_to_take_action.dart';
+import 'package:aves/widgets/settings/common/tile_leading.dart';
+import 'package:aves/widgets/settings/common/tiles/single_selection.dart';
+import 'package:aves/widgets/settings/common/tiles/switch_list.dart';
+import 'package:aves/widgets/settings/settings_definition.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class AccessibilitySection extends SettingsSection {
+  @override
+  String get key => 'accessibility';
+
+  @override
+  Widget icon(BuildContext context) => SettingsTileLeading(
+    icon: AIcons.accessibility,
+    color: context.select<AvesColorsData, Color>((v) => v.accessibility),
+  );
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsAccessibilitySectionTitle;
+
+  @override
+  Future<List<SettingsTile>> tiles(BuildContext context) => Future.value([
+    if (!settings.useTvLayout) SettingsTileAccessibilityShowPinchGestureAlternatives(),
+    SettingsTileAccessibilityAnimations(),
+    SettingsTileAccessibilityTimeToTakeAction(),
+  ]);
+}
+
+class SettingsTileAccessibilityShowPinchGestureAlternatives extends SettingsTile {
+  @override
+  List<String> get settingKeys => [SettingKeys.showPinchGestureAlternativesKey];
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsAccessibilityShowPinchGestureAlternatives;
+
+  @override
+  Widget build(BuildContext context) => SettingsSwitchListTile(
+    selector: (context, s) => s.showPinchGestureAlternatives,
+    onChanged: (v) => settings.showPinchGestureAlternatives = v,
+    title: title,
+  );
+}
+
+class SettingsTileAccessibilityAnimations extends SettingsTile {
+  @override
+  List<String> get settingKeys => [SettingKeys.accessibilityAnimationsKey];
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsRemoveAnimationsTile;
+
+  @override
+  Widget build(BuildContext context) => SettingsSelectionListTile<AccessibilityAnimations>(
+    values: AccessibilityAnimations.values,
+    getName: (context, v) => v.getName(context),
+    selector: (context, s) => s.accessibilityAnimations,
+    onSelection: (v) => settings.accessibilityAnimations = v,
+    tileTitle: title,
+    dialogTitle: context.l10n.settingsRemoveAnimationsDialogTitle,
+  );
+}
+
+class SettingsTileAccessibilityTimeToTakeAction extends SettingsTile {
+  @override
+  List<String> get settingKeys => TimeToTakeActionTile.settingKeys;
+
+  @override
+  String title(BuildContext context) => context.l10n.settingsTimeToTakeActionTile;
+
+  @override
+  Widget build(BuildContext context) => const TimeToTakeActionTile();
+}

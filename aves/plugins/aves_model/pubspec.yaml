@@ -1,0 +1,21 @@
+name: aves_model
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.13.3 <4.0.0"
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  aves_utils:
+    path: ../aves_utils
+  collection:
+  equatable:
+  meta:
+
+dev_dependencies:
+  flutter_lints:
+
+flutter:

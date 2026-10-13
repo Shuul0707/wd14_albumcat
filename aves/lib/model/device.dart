@@ -1,0 +1,76 @@
+import 'package:aves/services/common/services.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+final Device device = Device._private();
+
+class Device {
+  late final String _packageName, _packageVersion, _userAgent;
+  late final int? _availableProcessors;
+  late final bool _canAuthenticateUser, _canPinShortcut, _showPinShortcutFeedback;
+  late final bool _canRenderSubdivisionFlagEmojis, _canRequestMediaManagementPermission, _canRequestNotificationPermission;
+  late final bool _hasGeocoder, _isDynamicColorAvailable, _supportEdgeToEdgeUIMode, _supportPictureInPicture;
+  late final bool _isPhysicalDevice, _isTelevision;
+
+  String get packageName => _packageName;
+
+  String get packageVersion => _packageVersion;
+
+  String get userAgent => _userAgent;
+
+  int? get availableProcessors => _availableProcessors;
+
+  bool get canAuthenticateUser => _canAuthenticateUser;
+
+  bool get canPinShortcut => _canPinShortcut;
+
+  bool get canRenderSubdivisionFlagEmojis => _canRenderSubdivisionFlagEmojis;
+
+  bool get canRequestMediaManagementPermission => _canRequestMediaManagementPermission;
+
+  bool get canRequestNotificationPermission => _canRequestNotificationPermission;
+
+  bool get hasGeocoder => _hasGeocoder;
+
+  bool get isDynamicColorAvailable => _isDynamicColorAvailable;
+
+  bool get isPhysicalDevice => _isPhysicalDevice;
+
+  bool get isTelevision => _isTelevision;
+
+  bool get showPinShortcutFeedback => _showPinShortcutFeedback;
+
+  bool get supportEdgeToEdgeUIMode => _supportEdgeToEdgeUIMode;
+
+  bool get supportPictureInPicture => _supportPictureInPicture;
+
+  new _private();
+
+  Future<void> init() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    _packageName = packageInfo.packageName;
+    _packageVersion = packageInfo.version;
+    _userAgent = '$_packageName/$_packageVersion';
+
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    _isPhysicalDevice = androidInfo.isPhysicalDevice;
+    _isTelevision = androidInfo.systemFeatures.contains('android.software.leanback');
+
+    final auth = LocalAuthentication();
+    _canAuthenticateUser = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+
+    _availableProcessors = await deviceService.getAvailableProcessors();
+
+    final capabilities = await deviceService.getCapabilities();
+    _canPinShortcut = capabilities['canPinShortcut'] as bool? ?? false;
+    _canRenderSubdivisionFlagEmojis = capabilities['canRenderSubdivisionFlagEmojis'] as bool? ?? false;
+    _canRequestMediaManagementPermission = capabilities['canRequestMediaManagementPermission'] as bool? ?? false;
+    _canRequestNotificationPermission = capabilities['canRequestNotificationPermission'] as bool? ?? false;
+    _hasGeocoder = capabilities['hasGeocoder'] as bool? ?? false;
+    _isDynamicColorAvailable = capabilities['isDynamicColorAvailable'] as bool? ?? false;
+    _showPinShortcutFeedback = capabilities['showPinShortcutFeedback'] as bool? ?? false;
+    _supportEdgeToEdgeUIMode = capabilities['supportEdgeToEdgeUIMode'] as bool? ?? false;
+    _supportPictureInPicture = capabilities['supportPictureInPicture'] as bool? ?? false;
+  }
+}

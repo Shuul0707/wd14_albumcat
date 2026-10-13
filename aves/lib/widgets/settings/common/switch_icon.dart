@@ -1,0 +1,35 @@
+import 'package:aves/theme/colors.dart';
+import 'package:aves/theme/durations.dart';
+import 'package:aves/widgets/settings/common/tiles/switch_list.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class const SettingSwitchTrailingIcon({
+  super.key,
+  required final IconData icon,
+  required final bool disabled,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      // Switch width (`_kSwitchWidth`) + tile content padding
+      padding: const EdgeInsetsDirectional.only(end: 59 + 16),
+      child: AnimatedSwitcher(
+        duration: context.read<DurationsData>().iconAnimation,
+        child: Icon(
+          icon,
+          key: key,
+          size: getIconSize(context),
+          color: getIconColor(context).withValues(alpha: disabled ? SettingsSwitchListTile.disabledOpacity : 1),
+        ),
+      ),
+    );
+  }
+
+  static double getIconSize(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    return textScaler.scale(IconTheme.of(context).size!);
+  }
+
+  static Color getIconColor(BuildContext context) => context.select<AvesColorsData, Color>((v) => v.neutral);
+}

@@ -1,0 +1,67 @@
+import 'dart:async';
+
+import 'package:aves_map/src/zoomed_bounds.dart';
+import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:leak_tracker/leak_tracker.dart';
+
+class AvesMapController {
+  final StreamController<AvesMapEvent> _streamController = StreamController.broadcast();
+  ZoomedBounds? _idleBounds;
+
+  ZoomedBounds? get idleBounds => _idleBounds;
+
+  Stream<AvesMapEvent> get _events => _streamController.stream;
+
+  Stream<MapControllerMoveEvent> get moveCommands => _events.where((event) => event is MapControllerMoveEvent).cast<MapControllerMoveEvent>();
+
+  Stream<MapControllerZoomEvent> get zoomCommands => _events.where((event) => event is MapControllerZoomEvent).cast<MapControllerZoomEvent>();
+
+  Stream<MapControllerRotationResetEvent> get rotationResetCommands => _events.where((event) => event is MapControllerRotationResetEvent).cast<MapControllerRotationResetEvent>();
+
+  Stream<MapIdleUpdate> get idleUpdates => _events.where((event) => event is MapIdleUpdate).cast<MapIdleUpdate>();
+
+  Stream<MapMarkerLocationChangeEvent> get markerLocationChanges => _events.where((event) => event is MapMarkerLocationChangeEvent).cast<MapMarkerLocationChangeEvent>();
+
+  new() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      LeakTracking.dispatchObjectCreated(
+        library: 'aves',
+        className: '$AvesMapController',
+        object: this,
+      );
+    }
+  }
+
+  void dispose() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      LeakTracking.dispatchObjectDisposed(object: this);
+    }
+    _streamController.close();
+  }
+
+  void moveTo(LatLng latLng) => _streamController.add(MapControllerMoveEvent(latLng));
+
+  void zoomBy(double delta) => _streamController.add(MapControllerZoomEvent(delta));
+
+  void resetRotation() => _streamController.add(MapControllerRotationResetEvent());
+
+  void notifyIdle(ZoomedBounds bounds) {
+    _idleBounds = bounds;
+    _streamController.add(MapIdleUpdate(bounds));
+  }
+
+  void notifyMarkerLocationChange() => _streamController.add(MapMarkerLocationChangeEvent());
+}
+
+abstract class AvesMapEvent;
+
+class MapControllerMoveEvent(final LatLng latLng) extends AvesMapEvent;
+
+class MapControllerZoomEvent(final double delta) extends AvesMapEvent;
+
+class MapControllerRotationResetEvent extends AvesMapEvent;
+
+class MapIdleUpdate(final ZoomedBounds bounds) extends AvesMapEvent;
+
+class MapMarkerLocationChangeEvent extends AvesMapEvent;

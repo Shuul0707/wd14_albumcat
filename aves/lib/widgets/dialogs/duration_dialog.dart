@@ -1,0 +1,127 @@
+import 'package:aves/locale/ui.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/widgets/common/basic/wheel.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/providers/media_query_data_provider.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:material_ui/material_ui.dart';
+
+class DurationDialog extends StatefulWidget {
+  final int initialSeconds;
+
+  const new({
+    super.key,
+    required this.initialSeconds,
+  });
+
+  @override
+  State<DurationDialog> createState() => _DurationDialogState();
+}
+
+class _DurationDialogState extends State<DurationDialog> {
+  late ValueNotifier<int> _minutes, _seconds;
+
+  @override
+  void initState() {
+    super.initState();
+    final seconds = widget.initialSeconds;
+    _minutes = ValueNotifier(seconds ~/ Duration.secondsPerMinute);
+    _seconds = ValueNotifier(seconds % Duration.secondsPerMinute);
+  }
+
+  @override
+  void dispose() {
+    _minutes.dispose();
+    _seconds.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQueryDataProvider(
+      child: Builder(
+        builder: (context) {
+          final l10n = context.l10n;
+          final timeComponentFormatter = settings.avesLocale.decimalNumberFormat();
+
+          const textStyle = TextStyle(fontSize: 34);
+          const digitsAlign = TextAlign.right;
+
+          return AvesDialog(
+            scrollableContent: [
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Center(
+                  child: Table(
+                    textDirection: kTimeComponentsDirection,
+                    children: [
+                      TableRow(
+                        children: [
+                          Center(child: Text(l10n.durationDialogMinutes)),
+                          const SizedBox(width: 16),
+                          Center(child: Text(l10n.durationDialogSeconds)),
+                        ],
+                      ),
+                      TableRow(
+                        children: [
+                          Align(
+                            alignment: .centerRight,
+                            child: WheelSelector(
+                              valueNotifier: _minutes,
+                              values: List.generate(Duration.minutesPerHour, (i) => i),
+                              textStyle: textStyle,
+                              textAlign: digitsAlign,
+                              format: timeComponentFormatter.format,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              ':',
+                              style: textStyle,
+                            ),
+                          ),
+                          Align(
+                            alignment: .centerLeft,
+                            child: WheelSelector(
+                              valueNotifier: _seconds,
+                              values: List.generate(Duration.secondsPerMinute, (i) => i),
+                              textStyle: textStyle,
+                              textAlign: digitsAlign,
+                              format: timeComponentFormatter.format,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    defaultColumnWidth: const IntrinsicColumnWidth(),
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  ),
+                ),
+              ),
+            ],
+            actions: [
+              const CancelButton(),
+              ListenableBuilder(
+                listenable: Listenable.merge([_minutes, _seconds]),
+                builder: (context, child) {
+                  final isValid = _minutes.value > 0 || _seconds.value > 0;
+                  return TextButton(
+                    onPressed: isValid ? () => _submit(context) : null,
+                    child: child!,
+                  );
+                },
+                child: Text(l10n.applyButtonLabel),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _submit(BuildContext context) {
+    final seconds = _minutes.value * Duration.secondsPerMinute + _seconds.value;
+    return Navigator.maybeOf(context)?.pop<int>(seconds);
+  }
+}

@@ -1,0 +1,434 @@
+import 'dart:async';
+
+import 'package:aves/theme/durations.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/styles.dart';
+import 'package:aves/widgets/common/basic/divider.dart';
+import 'package:aves/widgets/common/basic/font_size_icon_theme.dart';
+import 'package:aves/widgets/common/basic/scaffold.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/identity/buttons/captioned_button.dart';
+import 'package:aves/widgets/common/identity/buttons/overlay_button.dart';
+import 'package:aves/widgets/settings/common/quick_actions/action_panel.dart';
+import 'package:aves/widgets/settings/common/quick_actions/available_actions.dart';
+import 'package:aves/widgets/settings/common/quick_actions/placeholder.dart';
+import 'package:aves/widgets/settings/common/quick_actions/quick_actions.dart';
+import 'package:collection/collection.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+
+class QuickActionEditorController<T extends Object>({
+  required final List<T> Function() load,
+  required final void Function(List<T> actions) save,
+}) with ChangeNotifier {
+  List<T> _currentItems = [];
+  final StreamController<EditorControllerEvent<T>> _eventsController = StreamController.broadcast();
+
+  Stream<EditorControllerEvent<T>> get events => _eventsController.stream;
+
+  void notify() {
+    notifyListeners();
+  }
+
+  bool add(T? item) => insert(_currentItems.length, item);
+
+  bool insert(int index, T? item) {
+    if (item == null || _currentItems.contains(item)) return false;
+
+    _currentItems.insert(index, item);
+    _eventsController.add(_ItemAddedEvent(index, item));
+    notify();
+    return true;
+  }
+
+  bool remove(T? item) {
+    if (item == null || !_currentItems.contains(item)) return false;
+
+    final index = _currentItems.indexOf(item);
+    _currentItems.removeAt(index);
+    _eventsController.add(_ItemRemovedEvent(index, item));
+    notify();
+    return true;
+  }
+}
+
+class EditorControllerEvent<T>(final int index, final T item);
+
+class _ItemAddedEvent<T>(super.index, super.item) extends EditorControllerEvent<T>;
+
+class _ItemRemovedEvent<T>(super.index, super.item) extends EditorControllerEvent<T>;
+
+class const QuickActionEditorPage<T extends Object>({
+  super.key,
+  required final String title,
+  final List<Widget>? appBarActions,
+  required final String bannerText,
+  final TextDirection? displayedButtonsDirection,
+  required final List<List<T>> allAvailableActions,
+  required final Widget Function(BuildContext context, T action) actionIcon,
+  required final String Function(BuildContext context, T action) actionText,
+  required final QuickActionEditorController<T> controller,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AvesScaffold(
+      appBar: AppBar(
+        title: Text(title),
+        actions: appBarActions,
+      ),
+      body: SafeArea(
+        bottom: false,
+        child: BackdropGroup(
+          child: QuickActionEditorBody(
+            bannerText: bannerText,
+            displayedButtonsDirection: displayedButtonsDirection,
+            allAvailableActions: allAvailableActions,
+            actionIcon: actionIcon,
+            actionText: actionText,
+            controller: controller,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class const QuickActionEditorBody<T extends Object>({
+  super.key,
+  required final String bannerText,
+  final TextDirection? displayedButtonsDirection,
+  required final List<List<T>> allAvailableActions,
+  required final Widget Function(BuildContext context, T action) actionIcon,
+  required final String Function(BuildContext context, T action) actionText,
+  required final QuickActionEditorController<T> controller,
+}) extends StatefulWidget {
+  @override
+  State<QuickActionEditorBody<T>> createState() => _QuickActionEditorBodyState<T>();
+}
+
+class _QuickActionEditorBodyState<T extends Object> extends State<QuickActionEditorBody<T>> with AutomaticKeepAliveClientMixin {
+  final Set<StreamSubscription> _subscriptions = {};
+  final GlobalKey<AnimatedListState> _animatedListKey = GlobalKey(debugLabel: 'quick-actions-animated-list');
+  Timer? _targetLeavingTimer;
+  final ValueNotifier<T?> _draggedQuickAction = ValueNotifier(null);
+  final ValueNotifier<T?> _draggedAvailableAction = ValueNotifier(null);
+  final ValueNotifier<bool> _quickActionHighlight = ValueNotifier(false);
+  final ValueNotifier<bool> _availableActionHighlight = ValueNotifier(false);
+  final PageController _availableActionPageController = PageController();
+
+  // use a flag to prevent quick action target accept/leave when already animating reorder
+  // as dragging a button against axis direction messes index resolution while items pop in and out
+  bool _reordering = false;
+
+  QuickActionEditorController<T> get controller => widget.controller;
+
+  static const _listAnimation = ADurations.quickActionListAnimation;
+  static const double _quickActionVerticalPadding = 16.0;
+
+  @override
+  void initState() {
+    super.initState();
+    controller._currentItems = controller.load().toList();
+    _subscriptions.add(
+      controller.events.listen((e) {
+        switch (e) {
+          case _ItemAddedEvent():
+            _animatedListKey.currentState!.insertItem(
+              e.index,
+              duration: _listAnimation,
+            );
+          case _ItemRemovedEvent():
+            _animatedListKey.currentState!.removeItem(
+              e.index,
+              (context, animation) => DraggedPlaceholder(child: _buildQuickActionButton(e.item, animation)),
+              duration: _listAnimation,
+            );
+        }
+      }),
+    );
+  }
+
+  @override
+  void dispose() {
+    _draggedQuickAction.dispose();
+    _draggedAvailableAction.dispose();
+    _quickActionHighlight.dispose();
+    _availableActionHighlight.dispose();
+    _availableActionPageController.dispose();
+
+    _stopLeavingTimer();
+    super.dispose();
+  }
+
+  void _onQuickActionTargetLeave() {
+    _stopLeavingTimer();
+    final action = _draggedAvailableAction.value;
+    _targetLeavingTimer = Timer(_listAnimation + const Duration(milliseconds: 50), () {
+      _removeQuickAction(action);
+      _quickActionHighlight.value = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    final _quickActions = controller._currentItems;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final header = QuickActionButton<T>(
+      placement: QuickActionPlacement.header,
+      panelHighlight: _quickActionHighlight,
+      draggedQuickAction: _draggedQuickAction,
+      draggedAvailableAction: _draggedAvailableAction,
+      insertAction: _insertQuickAction,
+      removeAction: _removeQuickAction,
+      onTargetLeave: _onQuickActionTargetLeave,
+    );
+    final footer = QuickActionButton<T>(
+      placement: QuickActionPlacement.footer,
+      panelHighlight: _quickActionHighlight,
+      draggedQuickAction: _draggedQuickAction,
+      draggedAvailableAction: _draggedAvailableAction,
+      insertAction: _insertQuickAction,
+      removeAction: _removeQuickAction,
+      onTargetLeave: _onQuickActionTargetLeave,
+    );
+    final originalDirection = Directionality.of(context);
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) => widget.controller.save(_quickActions),
+      child: ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const FontSizeIconTheme(child: Icon(AIcons.info)),
+                const SizedBox(width: 16),
+                Expanded(child: Text(widget.bannerText)),
+              ],
+            ),
+          ),
+          const ThinDivider(),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 16, right: 16),
+            child: Text(
+              context.l10n.settingsViewerQuickActionEditorDisplayedButtonsSectionTitle,
+              style: AStyles.sectionTitleStyle(context.knownLocale),
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _quickActionHighlight,
+            builder: (context, highlight, child) => ActionPanel(
+              highlight: highlight,
+              child: child!,
+            ),
+            child: Directionality(
+              textDirection: widget.displayedButtonsDirection ?? originalDirection,
+              child: SizedBox(
+                height: OverlayButton.getSize(context) + _quickActionVerticalPadding * 2,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: FractionallySizedBox(
+                        alignment: .centerStart,
+                        widthFactor: .5,
+                        child: header,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: FractionallySizedBox(
+                        alignment: .centerEnd,
+                        widthFactor: .5,
+                        child: footer,
+                      ),
+                    ),
+                    Container(
+                      alignment: .center,
+                      child: AnimatedList(
+                        key: _animatedListKey,
+                        initialItemCount: _quickActions.length,
+                        scrollDirection: Axis.horizontal,
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemBuilder: (context, index, animation) {
+                          if (index >= _quickActions.length) return const SizedBox();
+                          final action = _quickActions[index];
+                          return Directionality(
+                            textDirection: originalDirection,
+                            child: QuickActionButton<T>(
+                              placement: QuickActionPlacement.action,
+                              action: action,
+                              panelHighlight: _quickActionHighlight,
+                              draggedQuickAction: _draggedQuickAction,
+                              draggedAvailableAction: _draggedAvailableAction,
+                              insertAction: _insertQuickAction,
+                              removeAction: _removeQuickAction,
+                              onTargetLeave: _onQuickActionTargetLeave,
+                              draggableFeedbackBuilder: (action) => CaptionedButton(
+                                icon: widget.actionIcon(context, action),
+                                caption: widget.actionText(context, action),
+                                showCaption: false,
+                                onPressed: () {},
+                              ),
+                              child: _buildQuickActionButton(action, animation),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    ListenableBuilder(
+                      listenable: controller,
+                      builder: (context, child) => _quickActions.isEmpty
+                          ? Center(
+                              child: Text(
+                                context.l10n.settingsViewerQuickActionEmpty,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            )
+                          : const SizedBox(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              context.l10n.settingsViewerQuickActionEditorAvailableButtonsSectionTitle,
+              style: AStyles.sectionTitleStyle(context.knownLocale),
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _availableActionHighlight,
+            builder: (context, highlight, child) => ActionPanel(
+              highlight: highlight,
+              child: child!,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final allAvailableActions = widget.allAvailableActions;
+                final maxWidth = constraints.maxWidth;
+                final maxHeight = allAvailableActions
+                    .map(
+                      (page) => AvailableActionPanel.heightFor(
+                        context,
+                        page.map((v) => widget.actionText(context, v)).toList(),
+                        maxWidth,
+                      ),
+                    )
+                    .max;
+                return Column(
+                  children: [
+                    if (allAvailableActions.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SmoothPageIndicator(
+                          controller: _availableActionPageController,
+                          count: allAvailableActions.length,
+                          effect: WormEffect(
+                            dotWidth: 8,
+                            dotHeight: 8,
+                            dotColor: colorScheme.onSurface.withValues(alpha: .2),
+                            activeDotColor: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    SizedBox(
+                      height: maxHeight,
+                      child: PageView(
+                        controller: _availableActionPageController,
+                        children: allAvailableActions
+                            .map(
+                              (allActions) => AvailableActionPanel<T>(
+                                allActions: allActions,
+                                quickActions: _quickActions,
+                                quickActionsChangeNotifier: controller,
+                                panelHighlight: _availableActionHighlight,
+                                draggedQuickAction: _draggedQuickAction,
+                                draggedAvailableAction: _draggedAvailableAction,
+                                removeQuickAction: _removeQuickAction,
+                                actionIcon: widget.actionIcon,
+                                actionText: widget.actionText,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _stopLeavingTimer() => _targetLeavingTimer?.cancel();
+
+  bool _insertQuickAction(T action, QuickActionPlacement placement, T? overAction) {
+    _stopLeavingTimer();
+    if (_reordering) return false;
+
+    final _quickActions = controller._currentItems;
+    final currentIndex = _quickActions.indexOf(action);
+    final contained = currentIndex != -1;
+    int? targetIndex;
+    switch (placement) {
+      case .header:
+        targetIndex = 0;
+      case .footer:
+        targetIndex = _quickActions.length - (contained ? 1 : 0);
+      case .action:
+        targetIndex = _quickActions.indexOf(overAction!);
+    }
+    if (currentIndex == targetIndex) return false;
+
+    _reordering = true;
+    _removeQuickAction(action);
+    controller.insert(targetIndex, action);
+    Future.delayed(_listAnimation).then((value) => _reordering = false);
+    return true;
+  }
+
+  bool _removeQuickAction(T? action) => controller.remove(action);
+
+  Widget _buildQuickActionButton(T action, Animation<double> animation) {
+    animation = animation.drive(CurveTween(curve: Curves.easeInOut));
+    Widget child = FadeTransition(
+      opacity: animation,
+      child: SizeTransition(
+        axis: Axis.horizontal,
+        sizeFactor: animation,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: _QuickActionEditorBodyState._quickActionVerticalPadding, horizontal: 4),
+          child: OverlayButton(
+            child: IconButton(
+              icon: widget.actionIcon(context, action),
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    child = ListenableBuilder(
+      listenable: Listenable.merge([_draggedQuickAction, _draggedAvailableAction]),
+      builder: (context, child) {
+        final dragged = _draggedQuickAction.value == action || _draggedAvailableAction.value == action;
+        if (dragged) {
+          child = DraggedPlaceholder(child: child!);
+        }
+        return child!;
+      },
+      child: child,
+    );
+
+    return child;
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}

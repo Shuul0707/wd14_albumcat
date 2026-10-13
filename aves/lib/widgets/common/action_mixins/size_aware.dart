@@ -1,0 +1,86 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/utils/android_file_utils.dart';
+import 'package:aves/utils/file_utils.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:aves_utils/aves_utils.dart';
+import 'package:collection/collection.dart';
+import 'package:material_ui/material_ui.dart';
+
+mixin SizeAwareMixin {
+  Future<bool> checkFreeSpaceForMove(
+    BuildContext context,
+    Set<AvesEntry> selection,
+    String destinationAlbum,
+    MoveType moveType,
+  ) async {
+    if (moveType == MoveType.toBin) return true;
+
+    // assume we have enough space if we cannot find the volume or its remaining free space
+    final destinationVolume = androidFileUtils.getStorageVolume(destinationAlbum);
+    if (destinationVolume == null) return true;
+
+    final free = await storageService.getFreeSpace(destinationVolume);
+    if (free == null) return true;
+
+    late int needed;
+    switch (moveType) {
+      case .copy:
+      case .export:
+        needed = selection.map((entry) => entry.sizeBytes).sum;
+      case .move:
+      case .toBin:
+      case .fromBin:
+        // when moving, we only need space for the entries that are not already on the destination volume
+        final byVolume = groupBy<AvesEntry, StorageVolume?>(selection, (entry) => androidFileUtils.getStorageVolume(entry.path)).whereNotNullKey();
+        final otherVolumes = byVolume.keys.where((volume) => volume != destinationVolume);
+        final fromOtherVolumes = otherVolumes.map((volume) => byVolume[volume]!.map((entry) => entry.sizeBytes).sum).sum;
+        // and we need at least as much space as the largest entry because individual entries are copied then deleted
+        final largestSingle = selection.fold<int>(0, (largest, entry) => max(largest, entry.sizeBytes ?? 0));
+        needed = max(fromOtherVolumes, largestSingle);
+    }
+
+    final hasEnoughSpace = needed < free;
+    if (!hasEnoughSpace) {
+      await _showNotEnoughSpaceDialog(context, needed, free, destinationVolume);
+    }
+    return hasEnoughSpace;
+  }
+
+  Future<bool> checkFreeSpace(
+    BuildContext context,
+    int needed,
+    String destinationAlbum,
+  ) async {
+    // assume we have enough space if we cannot find the volume or its remaining free space
+    final destinationVolume = androidFileUtils.getStorageVolume(destinationAlbum);
+    if (destinationVolume == null) return true;
+
+    final free = await storageService.getFreeSpace(destinationVolume);
+    if (free == null) return true;
+
+    final hasEnoughSpace = needed < free;
+    if (!hasEnoughSpace) {
+      await _showNotEnoughSpaceDialog(context, needed, free, destinationVolume);
+    }
+    return hasEnoughSpace;
+  }
+
+  Future<void> _showNotEnoughSpaceDialog(BuildContext context, int needed, int free, StorageVolume destinationVolume) async {
+    final locale = settings.avesLocale;
+    final neededSize = formatFileSize(locale, needed);
+    final freeSize = formatFileSize(locale, free);
+    final volume = destinationVolume.getDescription(context);
+    await showWarningDialog(
+      context: context,
+      message: context.l10n.notEnoughSpaceDialogMessage(neededSize, freeSize, volume),
+    );
+  }
+}

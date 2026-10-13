@@ -1,0 +1,75 @@
+import 'package:aves/app_mode.dart';
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/model/filters/query.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_lens.dart';
+import 'package:aves/widgets/collection/collection_grid.dart';
+import 'package:aves/widgets/collection/collection_page.dart';
+import 'package:aves/widgets/common/basic/insets.dart';
+import 'package:aves/widgets/common/basic/scaffold.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/providers/query_provider.dart';
+import 'package:aves/widgets/common/providers/selection_provider.dart';
+import 'package:collection/collection.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class ItemPickPage extends StatefulWidget {
+  static const routeName = '/item_pick';
+
+  final CollectionLens collection;
+  final bool canRemoveFilters;
+
+  const new({
+    super.key,
+    required this.collection,
+    required this.canRemoveFilters,
+  });
+
+  @override
+  State<ItemPickPage> createState() => _ItemPickPageState();
+}
+
+class _ItemPickPageState extends State<ItemPickPage> {
+  final ValueNotifier<AppMode> _appModeNotifier = ValueNotifier(.initialization);
+
+  @override
+  void dispose() {
+    _appModeNotifier.dispose();
+    // provided collection should be a new instance specifically created
+    // for the `ItemPickPage` widget, so it can be safely disposed here
+    widget.collection.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final collection = widget.collection;
+    final liveFilter = collection.filters.firstWhereOrNull((v) => v is QueryFilter && v.live) as QueryFilter?;
+    _appModeNotifier.value = widget.canRemoveFilters ? .pickUnfilteredMediaInternal : .pickFilteredMediaInternal;
+    return ListenableProvider<ValueNotifier<AppMode>>.value(
+      value: _appModeNotifier,
+      child: AvesScaffold(
+        body: SelectionProvider<AvesEntry>(
+          toSelectableItems: (entry) => entry.toSelectableItems(),
+          child: QueryProvider(
+            startEnabled: settings.getShowTitleQuery(context.currentRouteName!),
+            initialQuery: liveFilter?.query,
+            child: GestureAreaProtectorStack(
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: ChangeNotifierProvider<CollectionLens>.value(
+                  value: collection,
+                  child: const CollectionGrid(
+                    settingsRouteKey: CollectionPage.routeName,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

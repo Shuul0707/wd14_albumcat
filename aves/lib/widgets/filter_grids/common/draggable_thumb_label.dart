@@ -1,0 +1,52 @@
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/utils/file_utils.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/grid/draggable_thumb_label.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class FilterDraggableThumbLabel<T extends CollectionFilter> extends StatelessWidget {
+  final SortFactor sortFactor;
+  final double offsetY;
+
+  const new({
+    super.key,
+    required this.sortFactor,
+    required this.offsetY,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableThumbLabel<FilterGridItem<T>>(
+      offsetY: offsetY,
+      lineBuilder: (context, filterGridItem) {
+        switch (sortFactor) {
+          case .date:
+            return [
+              DraggableThumbLabel.formatMonthThumbLabel(context, settings.avesLocale, filterGridItem.entry?.bestDate),
+            ];
+          case .chipName:
+          case .path:
+            return [
+              filterGridItem.filter.getLabel(context),
+            ];
+          case .count:
+            return [
+              context.l10n.itemCount(context.read<CollectionSource>().count(filterGridItem.filter)),
+            ];
+          case .size:
+            return [
+              formatFileSize(settings.avesLocale, context.read<CollectionSource>().size(filterGridItem.filter)),
+            ];
+          case .albumItemName:
+          case .rating:
+          case .duration:
+            throw UnimplementedError();
+        }
+      },
+    );
+  }
+}

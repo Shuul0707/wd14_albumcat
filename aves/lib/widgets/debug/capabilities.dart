@@ -1,0 +1,145 @@
+import 'package:aves/model/device.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/widgets/common/identity/aves_expansion_tile.dart';
+import 'package:aves/widgets/common/identity/highlight_title.dart';
+import 'package:aves/widgets/settings/language/locales.dart';
+import 'package:aves/widgets/viewer/info/common.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const DebugCapabilitiesSection({super.key}) extends StatefulWidget {
+  @override
+  State<DebugCapabilitiesSection> createState() => _DebugCapabilitiesSectionState();
+}
+
+class _DebugCapabilitiesSectionState extends State<DebugCapabilitiesSection> with AutomaticKeepAliveClientMixin {
+  late final Future<List<Object>> _appFuture;
+  late final Future<List<bool>> _windowFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _appFuture = Future.wait([
+      appProfileService.canInteractAcrossProfiles(),
+      appProfileService.canRequestInteractAcrossProfiles(),
+      appProfileService.getTargetUserProfiles(),
+    ]);
+    _windowFuture = Future.wait([
+      windowService.isCutoutAware(),
+      windowService.isRotationLocked(),
+      windowService.supportsHdr(),
+      windowService.supportsWideGamut(),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return AvesExpansionTile(
+      title: 'Capabilities',
+      locale: KnownLocale.english,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Column(
+            crossAxisAlignment: .start,
+            children: [
+              const HighlightTitle(
+                title: 'Device',
+                locale: KnownLocale.english,
+              ),
+              InfoRowGroup(
+                info: {
+                  'availableProcessors': '${device.availableProcessors}',
+                  'canAuthenticateUser': '${device.canAuthenticateUser}',
+                  'canPinShortcut': '${device.canPinShortcut}',
+                  'canRenderSubdivisionFlagEmojis': '${device.canRenderSubdivisionFlagEmojis}',
+                  'canRequestMediaManagementPermission': '${device.canRequestMediaManagementPermission}',
+                  'canRequestNotificationPermission': '${device.canRequestNotificationPermission}',
+                  'hasGeocoder': '${device.hasGeocoder}',
+                  'isDynamicColorAvailable': '${device.isDynamicColorAvailable}',
+                  'isTelevision': '${device.isTelevision}',
+                  'showPinShortcutFeedback': '${device.showPinShortcutFeedback}',
+                  'supportEdgeToEdgeUIMode': '${device.supportEdgeToEdgeUIMode}',
+                  'supportPictureInPicture': '${device.supportPictureInPicture}',
+                },
+              ),
+            ],
+          ),
+        ),
+        FutureBuilder<List<bool>>(
+          future: _windowFuture,
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            if (data == null) {
+              return const SizedBox();
+            }
+            final [
+              bool isCutoutAware,
+              bool isRotationLocked,
+              bool supportsHdr,
+              bool supportsWideGamut,
+            ] = data;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: .start,
+                children: [
+                  const HighlightTitle(
+                    title: 'Window',
+                    locale: KnownLocale.english,
+                  ),
+                  InfoRowGroup(
+                    info: {
+                      'isCutoutAware': '$isCutoutAware',
+                      'isRotationLocked': '$isRotationLocked',
+                      'supportsHdr': '$supportsHdr',
+                      'supportsWideGamut': '$supportsWideGamut',
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        FutureBuilder<List<Object>>(
+          future: _appFuture,
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            if (data == null) {
+              return const SizedBox();
+            }
+
+            final canInteractAcrossProfiles = data[0] as bool;
+            final canRequestInteractAcrossProfiles = data[1] as bool;
+            final targetUserProfiles = data[2] as List<String>;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                crossAxisAlignment: .start,
+                children: [
+                  const HighlightTitle(
+                    title: 'App',
+                    locale: KnownLocale.english,
+                  ),
+                  InfoRowGroup(
+                    info: {
+                      'userAgent': device.userAgent,
+                      'canInteractAcrossProfiles': '$canInteractAcrossProfiles',
+                      'canRequestInteractAcrossProfiles': '$canRequestInteractAcrossProfiles',
+                      'targetUserProfiles': '$targetUserProfiles',
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}

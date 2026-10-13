@@ -1,0 +1,129 @@
+import 'dart:ui' as ui;
+
+import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
+import 'package:material_ui/material_ui.dart';
+
+// generate bitmap from widget, for Google map
+class const MarkerGeneratorWidget<T extends Key>({
+  super.key,
+  required final List<Widget> markers,
+  required final bool Function(T markerKey) isReadyToRender,
+  required final void Function(T markerKey, Uint8List bitmap) onRendered,
+}) extends StatefulWidget {
+  @override
+  State<MarkerGeneratorWidget<T>> createState() => _MarkerGeneratorWidgetState<T>();
+}
+
+class _MarkerGeneratorWidgetState<T extends Key> extends State<MarkerGeneratorWidget<T>> {
+  final Set<_MarkerGeneratorItem<T>> _items = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkNextFrame();
+  }
+
+  @override
+  void didUpdateWidget(covariant MarkerGeneratorWidget<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    widget.markers.forEach((markerWidget) {
+      final item = _getOrCreate(
+        markerKey: markerWidget.key as T,
+        devicePixelRatio: devicePixelRatio,
+      );
+      item.globalKey = GlobalKey();
+    });
+    _checkNextFrame();
+  }
+
+  void _checkNextFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final waitingItems = _items.where((v) => v.isWaiting).toSet();
+      final readyItems = waitingItems.where((v) => widget.isReadyToRender(v.markerKey)).toSet();
+      readyItems.forEach((v) async {
+        final bitmap = await v.render();
+        if (bitmap != null) {
+          widget.onRendered(v.markerKey, bitmap);
+        }
+      });
+      if (readyItems.length < waitingItems.length) {
+        _checkNextFrame();
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: Offset(MediaQuery.sizeOf(context).width, 0),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Stack(
+          children: _items.map((item) {
+            return RepaintBoundary(
+              key: item.globalKey,
+              child: widget.markers.firstWhereOrNull((v) => v.key == item.markerKey) ?? const SizedBox(),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  _MarkerGeneratorItem _getOrCreate({
+    required T markerKey,
+    required double devicePixelRatio,
+  }) {
+    final existingItem = _items.firstWhereOrNull((v) => v.markerKey == markerKey);
+    if (existingItem != null) return existingItem;
+
+    final newItem = _MarkerGeneratorItem(
+      markerKey: markerKey,
+      devicePixelRatio: devicePixelRatio,
+    );
+    _items.add(newItem);
+    return newItem;
+  }
+}
+
+enum MarkerGeneratorItemState { waiting, rendering, done }
+
+class _MarkerGeneratorItem<T extends Key>({
+  required final T markerKey,
+  required final double devicePixelRatio,
+}) {
+  GlobalKey? globalKey;
+  MarkerGeneratorItemState state = MarkerGeneratorItemState.waiting;
+
+  bool get isWaiting => state == MarkerGeneratorItemState.waiting;
+
+  Future<Uint8List?> render() async {
+    Uint8List? bytes;
+    final _globalKey = globalKey;
+    if (_globalKey != null) {
+      state = MarkerGeneratorItemState.rendering;
+      final boundary = _globalKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      if (boundary.hasSize && boundary.size != Size.zero) {
+        try {
+          final image = await boundary.toImage(pixelRatio: devicePixelRatio);
+          final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          bytes = byteData?.buffer.asUint8List();
+        } catch (error) {
+          // happens when widget is offscreen
+          debugPrint('failed to render image for key=$_globalKey with error=$error');
+        }
+      }
+      state = bytes != null ? MarkerGeneratorItemState.done : MarkerGeneratorItemState.waiting;
+    }
+    return bytes;
+  }
+
+  @override
+  String toString() => '$runtimeType#${shortHash(this)}{markerKey=$markerKey, globalKey=$globalKey, state=$state}';
+}

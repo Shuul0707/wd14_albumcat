@@ -1,35 +1,64 @@
-# Build the Aves fork (libre flavor, x86_64 debug APK) with CN mirrors.
+# Build the Aves fork (libre flavor) into an installable debug APK.
 #
-# Every environment variable here is load-bearing:
-#   PUB_HOSTED_URL / FLUTTER_STORAGE_BASE_URL  pub.dev and the Flutter engine
-#       artifacts are unreachable from here without the flutter-io.cn mirror.
-#   JAVA_HOME    Aves needs JDK 21; the machine default shim is not it.
+#   tools\aves_build.ps1 -Platform android-arm64     # a real phone
+#   tools\aves_build.ps1 -Platform android-x64       # an emulator
+#
+# The source tree is aves\ in this repository (an Aves fork with the AI tagging
+# page; see aves\FORK.md).  -Source points somewhere else if you keep your own
+# checkout.
+#
+# Result: <source>\build\app\outputs\flutter-apk\app-libre-debug.apk, which both
+# platforms overwrite -- copy it aside after an arm64 build before building x64.
+#
+# Environment variables, and why they are here:
+#   PUB_HOSTED_URL / FLUTTER_STORAGE_BASE_URL
+#       pub.dev and the Flutter engine artifacts, via the flutter-io.cn mirror.
+#       Only needed on a Chinese network; they are left alone if you already
+#       have them set in your environment.
+#   JAVA_HOME    Aves needs JDK 21 (Gradle toolchain 21).  Set it here only if
+#       the script cannot find a JDK 21 of its own.
 #   ANDROID_HOME / ANDROID_SDK_ROOT
-#       Flutter rewrites android/local.properties' sdk.dir from these.  Without
-#       them it points at the near-empty default root and AGP tries to fetch a
-#       package manifest from dl.google.com (~21 KiB/s) instead of building.
+#       Flutter rewrites android/local.properties' sdk.dir from these.
 #
-# The Maven mirror rewrite itself lives in ~/.gradle/init.d/zz-mirrors.gradle.
-#
-# -Platform picks the phone architecture: android-x64 runs on the emulator,
-# android-arm64 is what a real phone needs.  The APK lands in the same place
-# either way (build/app/outputs/flutter-apk/app-libre-debug.apk), so copy it
-# aside after an arm64 build or the next x64 build overwrites it.
+# A debug APK is signed with the local debug keystore, so it installs with a
+# plain `adb install` on any device -- that is why releases ship debug APKs.
+# For a release build you need your own keystore: copy android\key_template.properties
+# to android\key.properties and fill in the store/key values.
 param(
     [string]$Target = 'lib/main_libre.dart',
-    [string]$Log = 'E:\AlbumCategories\.tmp\aves_build.log',
     [string]$Platform = 'android-x64',
+    [string]$Source = '',
+    [string]$Log = '',
     [switch]$NoVerbose
 )
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
-$env:FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
+
+$root = Split-Path -Parent $PSScriptRoot
+if (-not $Source) { $Source = Join-Path $root 'aves' }
+if (-not $Log) { $Log = Join-Path $root '.tmp\aves_build.log' }
+
+if (-not (Test-Path $Source)) { throw "no source tree at $Source" }
+if (-not $env:PUB_HOSTED_URL) { $env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn' }
+if (-not $env:FLUTTER_STORAGE_BASE_URL) { $env:FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn' }
+if (-not $env:JAVA_HOME -and (Test-Path 'C:\Program Files\Java\jdk-21')) {
+    $env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
+}
+if (-not $env:ANDROID_HOME -and (Test-Path 'E:\Android\sdk')) {
+    $env:ANDROID_HOME = 'E:\Android\sdk'
+    $env:ANDROID_SDK_ROOT = 'E:\Android\sdk'
+}
 $env:GIT_TERMINAL_PROMPT = '0'
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
-$env:ANDROID_HOME = 'E:\Android\sdk'
-$env:ANDROID_SDK_ROOT = 'E:\Android\sdk'
-Set-Location E:\AlbumCategories\.tmp\aves-src
-$args = @('build', 'apk', '--debug', '--flavor', 'libre', '--target-platform', $Platform, '-t', $Target)
-if (-not $NoVerbose) { $args += '--verbose' }
-& 'E:\flutter\bin\flutter.bat' @args *>&1 | Out-File -FilePath $Log -Encoding utf8
-"EXIT=$LASTEXITCODE  log=$Log  ($((Get-Item $Log).Length) B)"
+
+$flutter = (Get-Command flutter.bat -ErrorAction SilentlyContinue).Source
+if (-not $flutter -and (Test-Path 'E:\flutter\bin\flutter.bat')) { $flutter = 'E:\flutter\bin\flutter.bat' }
+if (-not $flutter) { throw "flutter.bat not on PATH and not at E:\flutter\bin" }
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Log) | Out-Null
+Set-Location $Source
+$cmdArgs = @('build', 'apk', '--debug', '--flavor', 'libre', '--target-platform', $Platform, '-t', $Target)
+if (-not $NoVerbose) { $cmdArgs += '--verbose' }
+& $flutter @cmdArgs *>&1 | Out-File -FilePath $Log -Encoding utf8
+$apk = Join-Path $Source 'build\app\outputs\flutter-apk\app-libre-debug.apk'
+"EXIT=$LASTEXITCODE  log=$Log ($((Get-Item $Log).Length) B)"
+if (Test-Path $apk) { "APK=$apk  $((Get-Item $apk).Length) B" } else { "APK missing" }

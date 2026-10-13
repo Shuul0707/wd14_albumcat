@@ -1,0 +1,272 @@
+import 'package:aves/model/selection.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/section_keys.dart';
+import 'package:aves/theme/durations.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/styles.dart';
+import 'package:aves/widgets/common/basic/gestures/gesture_detector.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/grid/sections/list_layout.dart';
+import 'package:flutter/rendering.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class const SectionHeader<T>({
+  super.key,
+  required final SectionKey sectionKey,
+  final Widget? leading,
+  required final String title,
+  final Widget? trailing,
+  final bool selectable = true,
+}) extends StatelessWidget {
+  static const leadingSize = Size.square(32);
+  static const widgetSpanAlignmentMargin = EdgeInsetsDirectional.only(bottom: 4);
+  static final leadingMargin = const EdgeInsetsDirectional.only(end: 8) + widgetSpanAlignmentMargin;
+  static final trailingMargin = const EdgeInsetsDirectional.only(start: 8) + widgetSpanAlignmentMargin;
+  static const margin = EdgeInsets.symmetric(vertical: 0, horizontal: 8);
+  static const padding = EdgeInsets.symmetric(vertical: 16, horizontal: 8);
+  static const widgetSpanAlignment = PlaceholderAlignment.middle;
+
+  @override
+  Widget build(BuildContext context) {
+    final onTap = selectable ? () => _toggleSectionSelection(context) : null;
+
+    final theme = Theme.of(context);
+
+    Widget child = Container(
+      padding: padding,
+      constraints: BoxConstraints(minHeight: leadingSize.height),
+      child: AGestureDetector(
+        onTap: onTap,
+        onLongPress: selectable
+            ? Feedback.wrapForLongPress(() {
+                final selection = context.read<Selection<T>>();
+                if (selection.isSelecting) {
+                  _toggleSectionSelection(context);
+                } else {
+                  selection.select();
+                  selection.addToSelection(_getSectionEntries(context));
+                }
+              }, context)
+            : null,
+        longPressTimeout: settings.longPressTimeout,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              WidgetSpan(
+                alignment: widgetSpanAlignment,
+                child: Theme(
+                  data: theme.copyWith(
+                    iconTheme: theme.iconTheme.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  child: _SectionSelectableLeading<T>(
+                    selectable: selectable,
+                    sectionKey: sectionKey,
+                    browsingBuilder: leading != null
+                        ? (context) => Container(
+                            width: leadingSize.width,
+                            height: leadingSize.height,
+                            margin: leadingMargin,
+                            child: leading,
+                          )
+                        : null,
+                    onPressed: onTap,
+                  ),
+                ),
+              ),
+              TextSpan(
+                text: title,
+                style: _headerTextStyle(context),
+              ),
+              if (trailing != null)
+                WidgetSpan(
+                  alignment: widgetSpanAlignment,
+                  child: Container(
+                    margin: trailingMargin,
+                    child: trailing,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (settings.useTvLayout) {
+      // prevent ink response when tapping the header does nothing,
+      // because otherwise Play Store reviewers think it is broken navigation
+      child = context.select<Selection<T>, bool>((v) => v.isSelecting)
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: const BorderRadius.all(Radius.circular(123)),
+              child: child,
+            )
+          : Focus(child: child);
+    }
+    return Container(
+      alignment: .centerStart,
+      margin: margin,
+      child: child,
+    );
+  }
+
+  List<T> _getSectionEntries(BuildContext context) => context.read<SectionedListLayout<T>>().sections[sectionKey] ?? [];
+
+  void _toggleSectionSelection(BuildContext context) {
+    final sectionEntries = _getSectionEntries(context);
+    final selection = context.read<Selection<T>>();
+    final isSelected = selection.isSelected(sectionEntries);
+    if (isSelected) {
+      selection.removeFromSelection(sectionEntries);
+    } else {
+      selection.addToSelection(sectionEntries);
+    }
+  }
+
+  // TODO TLAD [perf] cache header extent computation? (depends on subsystems, e.g. covers for album type)
+  static double getPreferredHeight({
+    required BuildContext context,
+    required double maxWidth,
+    required String title,
+    bool hasLeading = false,
+    bool hasTrailing = false,
+  }) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final leadingFontSize = leadingSize.height;
+    final textScaleFactor = textScaler.scale(leadingFontSize) / leadingFontSize;
+    final maxContentWidth = maxWidth - (SectionHeader.padding.horizontal + SectionHeader.margin.horizontal);
+
+    final paragraph = RenderParagraph(
+      TextSpan(
+        children: [
+          // as of Flutter v3.7.7, `RenderParagraph` fails to lay out `WidgetSpan` offscreen
+          // so we use a hair space times a magic number to match width
+          TextSpan(
+            // 23 hair spaces match a width of 40.0
+            text: '\u200A' * (hasLeading ? 23 : 1),
+            // force a higher first line to match leading icon/selector dimension
+            style: TextStyle(height: 2.3 * textScaleFactor),
+          ),
+          if (hasTrailing) TextSpan(text: '\u200A' * 17),
+          TextSpan(
+            text: title,
+            style: _headerTextStyle(context),
+          ),
+        ],
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+    )..layout(BoxConstraints(maxWidth: maxContentWidth), parentUsesSize: true);
+    final height = paragraph.getMaxIntrinsicHeight(maxContentWidth);
+    paragraph.dispose();
+
+    return height;
+  }
+
+  static TextStyle _headerTextStyle(BuildContext context) {
+    // specify `height` for accurate paragraph height measurement
+    final defaultTextHeight = DefaultTextStyle.of(context).style.height;
+    return AStyles.sectionTitleStyle(context.knownLocale).copyWith(height: defaultTextHeight);
+  }
+}
+
+class const _SectionSelectableLeading<T>({
+  super.key,
+  final bool selectable = true,
+  required final SectionKey sectionKey,
+  required final WidgetBuilder? browsingBuilder,
+  required final VoidCallback? onPressed,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    if (!selectable) return _buildBrowsing(context);
+
+    final duration = context.select<DurationsData, Duration>((v) => v.formTransition);
+    final isSelecting = context.select<Selection<T>, bool>((selection) => selection.isSelecting);
+    final Widget child = isSelecting
+        ? _SectionSelectingLeading<T>(
+            sectionKey: sectionKey,
+            onPressed: onPressed,
+          )
+        : _buildBrowsing(context);
+
+    return FocusTraversalGroup(
+      descendantsAreFocusable: false,
+      descendantsAreTraversable: false,
+      child: AnimatedSwitcher(
+        duration: duration,
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        transitionBuilder: (child, animation) {
+          Widget transition = ScaleTransition(
+            scale: animation,
+            child: child,
+          );
+          if (browsingBuilder == null) {
+            // when switching with a header that has no icon,
+            // we also transition the size for a smooth push to the text
+            transition = SizeTransition(
+              axis: Axis.horizontal,
+              sizeFactor: animation,
+              child: transition,
+            );
+          }
+          return transition;
+        },
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildBrowsing(BuildContext context) => browsingBuilder?.call(context) ?? SizedBox(height: SectionHeader.leadingSize.height + SectionHeader.widgetSpanAlignmentMargin.vertical);
+}
+
+class const _SectionSelectingLeading<T>({
+  super.key,
+  required final SectionKey sectionKey,
+  required final VoidCallback? onPressed,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final duration = context.select<DurationsData, Duration>((v) => v.formTransition);
+    final sectionEntries = context.watch<SectionedListLayout<T>>().sections[sectionKey] ?? [];
+    final selection = context.watch<Selection<T>>();
+    final isSelected = selection.isSelected(sectionEntries);
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeOutBack,
+      transitionBuilder: (child, animation) => ScaleTransition(
+        scale: animation,
+        child: child,
+      ),
+      child: TooltipTheme(
+        key: ValueKey(isSelected),
+        data: TooltipTheme.of(context).copyWith(
+          preferBelow: false,
+        ),
+        child: Container(
+          width: SectionHeader.leadingSize.width,
+          height: SectionHeader.leadingSize.height,
+          margin: SectionHeader.leadingMargin,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: IconButton(
+              iconSize: 26,
+              onPressed: onPressed,
+              tooltip: isSelected ? context.l10n.collectionDeselectSectionTooltip : context.l10n.collectionSelectSectionTooltip,
+              style: ButtonStyle(
+                padding: WidgetStateProperty.all<EdgeInsetsGeometry>(EdgeInsets.zero),
+                minimumSize: WidgetStateProperty.all<Size>(SectionHeader.leadingSize),
+              ),
+              icon: Icon(isSelected ? AIcons.selected : AIcons.unselected),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

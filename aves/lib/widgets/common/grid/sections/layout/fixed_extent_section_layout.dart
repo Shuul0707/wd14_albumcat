@@ -1,0 +1,46 @@
+import 'package:aves/widgets/common/grid/sections/section_layout.dart';
+
+class const FixedExtentSectionLayout({
+  required super.sectionKey,
+  required super.firstIndex,
+  required super.lastIndex,
+  required super.minOffset,
+  required super.maxOffset,
+  required super.headerExtent,
+  required final double tileHeight,
+  required super.spacing,
+  required super.builder,
+}) extends SectionLayout {
+  final double mainAxisStride = tileHeight + spacing;
+
+  @override
+  List<Object?> get props => [sectionKey, firstIndex, lastIndex, minOffset, maxOffset, headerExtent, tileHeight, spacing];
+
+  @override
+  double indexToLayoutOffset(int index) {
+    index -= bodyFirstIndex;
+    if (index < 0) return minOffset;
+    return bodyMinOffset + index * mainAxisStride;
+  }
+
+  @override
+  double indexToMainAxisExtent(int index) {
+    index -= bodyFirstIndex;
+    if (index < 0) return headerExtent;
+    return mainAxisStride;
+  }
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset) {
+    scrollOffset -= bodyMinOffset;
+    if (mainAxisStride == 0 || !scrollOffset.isFinite || scrollOffset < 0) return firstIndex;
+    return bodyFirstIndex + scrollOffset ~/ mainAxisStride;
+  }
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset) {
+    scrollOffset -= bodyMinOffset;
+    if (mainAxisStride == 0 || !scrollOffset.isFinite || scrollOffset < 0) return firstIndex;
+    return bodyFirstIndex + (scrollOffset / mainAxisStride).ceil() - 1;
+  }
+}

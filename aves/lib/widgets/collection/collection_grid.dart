@@ -1,0 +1,762 @@
+import 'dart:async';
+
+import 'package:aves/app_mode.dart';
+import 'package:aves/locale/calendar/calendar_utils.dart';
+import 'package:aves/model/app/permissions.dart';
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/model/favourites.dart';
+import 'package:aves/model/filters/favourite.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/filters/mime.dart';
+import 'package:aves/model/selection.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_lens.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/model/source/section_keys.dart';
+import 'package:aves/ref/mime_types.dart';
+import 'package:aves/theme/durations.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/utils/time_utils.dart';
+import 'package:aves/widgets/collection/app_bar.dart';
+import 'package:aves/widgets/collection/draggable_thumb_label.dart';
+import 'package:aves/widgets/collection/grid/list_details_theme.dart';
+import 'package:aves/widgets/collection/grid/section_layout.dart';
+import 'package:aves/widgets/collection/grid/tile.dart';
+import 'package:aves/widgets/collection/loading.dart';
+import 'package:aves/widgets/common/basic/draggable_scrollbar/scrollbar.dart';
+import 'package:aves/widgets/common/basic/insets.dart';
+import 'package:aves/widgets/common/behaviour/routes.dart';
+import 'package:aves/widgets/common/behaviour/sloppy_scroll_physics.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/extensions/media_query.dart';
+import 'package:aves/widgets/common/grid/draggable_thumb_label.dart';
+import 'package:aves/widgets/common/grid/item_tracker.dart';
+import 'package:aves/widgets/common/grid/scaling.dart';
+import 'package:aves/widgets/common/grid/sections/fixed/scale_grid.dart';
+import 'package:aves/widgets/common/grid/sections/list_layout.dart';
+import 'package:aves/widgets/common/grid/sections/section_layout.dart';
+import 'package:aves/widgets/common/grid/selector.dart';
+import 'package:aves/widgets/common/grid/sliver.dart';
+import 'package:aves/widgets/common/grid/theme.dart';
+import 'package:aves/widgets/common/identity/buttons/outlined_button.dart';
+import 'package:aves/widgets/common/identity/empty.dart';
+import 'package:aves/widgets/common/identity/scroll_thumb.dart';
+import 'package:aves/widgets/common/providers/tile_extent_controller_provider.dart';
+import 'package:aves/widgets/common/providers/viewer_entry_provider.dart';
+import 'package:aves/widgets/common/thumbnail/decorated.dart';
+import 'package:aves/widgets/common/thumbnail/image.dart';
+import 'package:aves/widgets/common/thumbnail/notifications.dart';
+import 'package:aves/widgets/common/tile_extent_controller.dart';
+import 'package:aves/widgets/navigation/nav_bar/nav_bar.dart';
+import 'package:aves/widgets/viewer/entry_viewer_page.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+
+class const CollectionGrid({
+  super.key,
+  required final String settingsRouteKey,
+}) extends StatefulWidget {
+  static const double extentMin = 46;
+  static const double extentMax = 300;
+
+  static int get columnCountDefault => settings.useTvLayout ? 6 : 4;
+
+  @override
+  State<CollectionGrid> createState() => _CollectionGridState();
+
+  static double spacingForLayout(TileLayout layout) {
+    switch (layout) {
+      case .mosaic:
+        return 4;
+      case .grid:
+      case .list:
+      case .calendar:
+        return 2;
+    }
+  }
+}
+
+class _CollectionGridState extends State<CollectionGrid> {
+  TileExtentController? _tileExtentController;
+
+  String get settingsRouteKey => widget.settingsRouteKey;
+
+  @override
+  void dispose() {
+    _tileExtentController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filters = context.select<CollectionLens, Set<CollectionFilter>>((v) => v.visibleFilters);
+    final (isCalendar, spacing) = context.select<Settings, (bool, double)>((v) {
+      final layout = v.getEffectiveCollectionTileLayout(filters);
+      return (layout == .calendar, CollectionGrid.spacingForLayout(layout));
+    });
+
+    if (isCalendar) {
+      _tileExtentController = TileExtentController(
+        settingsRouteKey: null,
+        columnCountDefault: DateTime.daysPerWeek,
+        extentMin: 0,
+        extentMax: double.infinity,
+        spacing: spacing,
+        horizontalPadding: 2,
+      );
+    } else if (_tileExtentController?.settingsRouteKey != settingsRouteKey || _tileExtentController?.spacing != spacing) {
+      _tileExtentController = TileExtentController(
+        settingsRouteKey: settingsRouteKey,
+        columnCountDefault: CollectionGrid.columnCountDefault,
+        extentMin: CollectionGrid.extentMin,
+        extentMax: CollectionGrid.extentMax,
+        spacing: spacing,
+        horizontalPadding: 2,
+      );
+    }
+
+    return TileExtentControllerProvider(
+      controller: _tileExtentController!,
+      child: const _CollectionGridContent(),
+    );
+  }
+}
+
+class const _CollectionGridContent() extends StatefulWidget {
+  @override
+  State<_CollectionGridContent> createState() => _CollectionGridContentState();
+}
+
+class _CollectionGridContentState extends State<_CollectionGridContent> {
+  final ValueNotifier<AvesEntry?> _focusedItemNotifier = ValueNotifier(null);
+  final ValueNotifier<bool> _isScrollingNotifier = ValueNotifier(false);
+  final ValueNotifier<AppMode> _selectingAppModeNotifier = ValueNotifier(.pickFilteredMediaInternal);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<ViewerEntryNotifier>().value = null);
+  }
+
+  @override
+  void dispose() {
+    _focusedItemNotifier.dispose();
+    _isScrollingNotifier.dispose();
+    _selectingAppModeNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectable = context.select<ValueNotifier<AppMode>, bool>((v) => v.value.canSelectMedia);
+    return Consumer<CollectionLens>(
+      builder: (context, collection, child) {
+        final tileLayout = context.select<Settings, TileLayout>((v) => v.getEffectiveCollectionTileLayout(collection.visibleFilters));
+        final sectionedListLayoutProvider = ValueListenableBuilder<double>(
+          valueListenable: context.select<TileExtentController, ValueNotifier<double>>((controller) => controller.extentNotifier),
+          builder: (context, thumbnailExtent, child) {
+            assert(thumbnailExtent > 0);
+            return Selector<TileExtentController, (double, int, double, double)>(
+              selector: (context, c) => (c.viewportSize.width, c.columnCount, c.spacing, c.horizontalPadding),
+              builder: (context, c, child) {
+                final (scrollableWidth, columnCount, tileSpacing, horizontalPadding) = c;
+                final source = collection.source;
+                return GridTheme(
+                  extent: thumbnailExtent,
+                  isCalendar: tileLayout == .calendar,
+                  child: EntryListDetailsTheme(
+                    extent: thumbnailExtent,
+                    child: ValueListenableBuilder<SourceState>(
+                      valueListenable: source.stateNotifier,
+                      builder: (context, sourceState, child) {
+                        late final Duration tileAnimationDelay;
+                        if (sourceState == SourceState.ready) {
+                          // do not listen for animation delay change
+                          final target = context.read<DurationsData>().staggeredAnimationPageTarget;
+                          tileAnimationDelay = context.read<TileExtentController>().getTileAnimationDelay(target);
+                        } else {
+                          tileAnimationDelay = Duration.zero;
+                        }
+
+                        return NotificationListener<OpenViewerNotification>(
+                          onNotification: (notification) {
+                            _goToViewer(collection, notification.entry);
+                            return true;
+                          },
+                          child: StreamBuilder<AspectRatioChangedEvent>(
+                            stream: source.eventBus.on<AspectRatioChangedEvent>(),
+                            builder: (context, _) => SectionedEntryListLayoutProvider(
+                              collection: collection,
+                              selectable: selectable,
+                              scrollableWidth: scrollableWidth,
+                              tileLayout: tileLayout,
+                              columnCount: columnCount,
+                              spacing: tileSpacing,
+                              horizontalPadding: horizontalPadding,
+                              tileExtent: thumbnailExtent,
+                              tileBuilder: (entry, tileSize) {
+                                final extent = tileSize.shortestSide;
+                                return ListenableBuilder(
+                                  listenable: favourites,
+                                  builder: (context, child) {
+                                    Widget tile = InteractiveTile(
+                                      key: ValueKey(entry.id),
+                                      collection: collection,
+                                      entry: entry,
+                                      thumbnailExtent: extent,
+                                      tileLayout: tileLayout,
+                                      isScrollingNotifier: _isScrollingNotifier,
+                                    );
+                                    if (!settings.useTvLayout) return tile;
+
+                                    return Focus(
+                                      onFocusChange: (focused) {
+                                        if (focused) {
+                                          _focusedItemNotifier.value = entry;
+                                        } else if (_focusedItemNotifier.value == entry) {
+                                          _focusedItemNotifier.value = null;
+                                        }
+                                      },
+                                      child: ValueListenableBuilder<AvesEntry?>(
+                                        valueListenable: _focusedItemNotifier,
+                                        builder: (context, focusedItem, child) {
+                                          return AnimatedScale(
+                                            scale: focusedItem == entry ? 1 : .9,
+                                            curve: Curves.fastOutSlowIn,
+                                            duration: context.select<DurationsData, Duration>((v) => v.tvImageFocusAnimation),
+                                            child: child!,
+                                          );
+                                        },
+                                        child: tile,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              tileAnimationDelay: tileAnimationDelay,
+                              child: child!,
+                            ),
+                          ),
+                        );
+                      },
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: child,
+            );
+          },
+          child: _CollectionSectionedContent(
+            collection: collection,
+            isScrollingNotifier: _isScrollingNotifier,
+            scrollController: PrimaryScrollController.of(context),
+            tileLayout: tileLayout,
+            selectable: selectable,
+          ),
+        );
+        return sectionedListLayoutProvider;
+      },
+    );
+  }
+
+  Future<void> _goToViewer(CollectionLens collection, AvesEntry entry) async {
+    // track viewer entry for dynamic hero placeholder
+    final viewerEntryNotifier = context.read<ViewerEntryNotifier>();
+
+    // prevent navigating again to the same entry until fully back,
+    // as a workaround for the hero pop/push diversion animation issue
+    // (cf `ThumbnailImage` `Hero` usage)
+    if (viewerEntryNotifier.value == entry) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => viewerEntryNotifier.value = entry);
+
+    final viewerCollection = collection.copyWith(
+      listenToSource: false,
+    );
+    final selection = context.read<Selection<AvesEntry>>();
+    await Navigator.maybeOf(context)?.push(
+      TransparentMaterialPageRoute(
+        settings: const RouteSettings(name: EntryViewerPage.routeName),
+        transitionDuration: context.read<DurationsData>().viewerRouteTransitionDuration,
+        pageBuilder: (context, _, _) {
+          Widget child = EntryViewerPage(
+            collection: viewerCollection,
+            initialEntry: entry,
+          );
+
+          if (selection.isSelecting) {
+            child = MultiProvider(
+              providers: [
+                ListenableProvider<ValueNotifier<AppMode>>.value(value: _selectingAppModeNotifier),
+                ChangeNotifierProvider<Selection<AvesEntry>>.value(value: selection),
+              ],
+              child: child,
+            );
+          }
+
+          return child;
+        },
+      ),
+    );
+
+    // reset track viewer entry
+    final animate = context.read<Settings>().animate;
+    if (animate) {
+      // TODO TLAD fix timing when transition is incomplete, e.g. when going back while going to the viewer
+      await Future.delayed(ADurations.pageTransitionExact * timeDilation);
+    }
+    viewerEntryNotifier.value = null;
+  }
+}
+
+class const _CollectionSectionedContent({
+  required final CollectionLens collection,
+  required final ValueNotifier<bool> isScrollingNotifier,
+  required final ScrollController scrollController,
+  required final TileLayout tileLayout,
+  required final bool selectable,
+}) extends StatefulWidget {
+  @override
+  State<_CollectionSectionedContent> createState() => _CollectionSectionedContentState();
+}
+
+class _CollectionSectionedContentState extends State<_CollectionSectionedContent> {
+  final ValueNotifier<double> _appBarHeightNotifier = ValueNotifier(0);
+  final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'thumbnail-collection-scrollable');
+
+  CollectionLens get collection => widget.collection;
+
+  TileLayout get tileLayout => widget.tileLayout;
+
+  ScrollController get scrollController => widget.scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _appBarHeightNotifier.addListener(_onAppBarHeightChanged);
+  }
+
+  @override
+  void dispose() {
+    _appBarHeightNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scrollView = AnimationLimiter(
+      child: _CollectionScrollView(
+        scrollableKey: _scrollableKey,
+        collection: collection,
+        appBar: CollectionAppBar(
+          appBarHeightNotifier: _appBarHeightNotifier,
+          scrollController: scrollController,
+          collection: collection,
+        ),
+        appBarHeightNotifier: _appBarHeightNotifier,
+        isScrollingNotifier: widget.isScrollingNotifier,
+        scrollController: scrollController,
+      ),
+    );
+
+    final scaler = _CollectionScaler(
+      scrollableKey: _scrollableKey,
+      appBarHeightNotifier: _appBarHeightNotifier,
+      tileLayout: tileLayout,
+      child: scrollView,
+    );
+
+    final selector = GridSelectionGestureDetector<AvesEntry>(
+      scrollableKey: _scrollableKey,
+      selectable: widget.selectable,
+      items: collection.sortedEntries,
+      scrollController: scrollController,
+      appBarHeightNotifier: _appBarHeightNotifier,
+      child: scaler,
+    );
+
+    return GridItemTracker<AvesEntry>(
+      scrollableKey: _scrollableKey,
+      tileLayout: tileLayout,
+      appBarHeightNotifier: _appBarHeightNotifier,
+      scrollController: scrollController,
+      child: selector,
+    );
+  }
+
+  void _onAppBarHeightChanged() => setState(() {});
+}
+
+class const _CollectionScaler({
+  required final GlobalKey scrollableKey,
+  required final ValueNotifier<double> appBarHeightNotifier,
+  required final TileLayout tileLayout,
+  required final Widget child,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final (tileSpacing, horizontalPadding) = context.select<TileExtentController, (double, double)>((v) => (v.spacing, v.horizontalPadding));
+    final brightness = Theme.of(context).brightness;
+    final borderColor = DecoratedThumbnail.borderColor(context);
+    final borderWidth = DecoratedThumbnail.borderWidth(context);
+    return GridScaleGestureDetector<AvesEntry>(
+      scrollableKey: scrollableKey,
+      tileLayout: tileLayout,
+      heightForWidth: (width) => width,
+      gridBuilder: (center, tileSize, child) => CustomPaint(
+        painter: FixedExtentGridPainter(
+          tileLayout: tileLayout,
+          tileCenter: center,
+          tileSize: tileSize,
+          spacing: tileSpacing,
+          horizontalPadding: horizontalPadding,
+          borderWidth: borderWidth,
+          borderRadius: Radius.zero,
+          color: borderColor,
+          textDirection: Directionality.of(context),
+        ),
+        child: child,
+      ),
+      scaledItemBuilder: (entry, tileSize) => EntryListDetailsTheme(
+        extent: tileSize.height,
+        child: Tile(
+          entry: entry,
+          thumbnailExtent: context.read<TileExtentController>().effectiveExtentMax,
+          tileLayout: tileLayout,
+        ),
+      ),
+      mosaicItemBuilder: (index, targetExtent) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: ThumbnailImage.computeLoadingBackgroundColor(index * 10, brightness).withValues(alpha: .9),
+          border: Border.all(
+            color: borderColor,
+            width: borderWidth,
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class const _CollectionScrollView({
+  required final GlobalKey scrollableKey,
+  required final CollectionLens collection,
+  required final Widget appBar,
+  required final ValueNotifier<double> appBarHeightNotifier,
+  required final ValueNotifier<bool> isScrollingNotifier,
+  required final ScrollController scrollController,
+}) extends StatefulWidget {
+  @override
+  State<_CollectionScrollView> createState() => _CollectionScrollViewState();
+}
+
+class _CollectionScrollViewState extends State<_CollectionScrollView> with WidgetsBindingObserver {
+  Timer? _scrollMonitoringTimer;
+  bool _checkingStoragePermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _registerWidget(widget);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CollectionScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _unregisterWidget(oldWidget);
+    _registerWidget(widget);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _unregisterWidget(widget);
+    _stopScrollMonitoringTimer();
+    super.dispose();
+  }
+
+  void _registerWidget(_CollectionScrollView widget) {
+    widget.collection.addListener(_onCollectionChanged);
+    widget.collection.filterChangeNotifier.addListener(_scrollToTop);
+    widget.collection.layoutChangeNotifier.addListener(_scrollToTop);
+    widget.scrollController.addListener(_onScrollChanged);
+  }
+
+  void _unregisterWidget(_CollectionScrollView widget) {
+    widget.collection.removeListener(_onCollectionChanged);
+    widget.collection.filterChangeNotifier.removeListener(_scrollToTop);
+    widget.collection.layoutChangeNotifier.removeListener(_scrollToTop);
+    widget.scrollController.removeListener(_onScrollChanged);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == .resumed && _checkingStoragePermission) {
+      _checkingStoragePermission = false;
+      _isStoragePermissionGranted.then((granted) {
+        if (granted) {
+          widget.collection.source.init(scope: CollectionSource.fullScope);
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scrollView = _buildScrollView(widget.appBar, widget.collection);
+    return settings.useTvLayout ? scrollView : _buildDraggableScrollView(scrollView, widget.collection);
+  }
+
+  Widget _buildDraggableScrollView(Widget scrollView, CollectionLens collection) {
+    return ValueListenableBuilder<double>(
+      valueListenable: widget.appBarHeightNotifier,
+      builder: (context, appBarHeight, child) {
+        return Selector<MediaQueryData, double>(
+          selector: (context, mq) => mq.safeBottomPadding,
+          builder: (context, safeBottomPadding, child) {
+            return Selector<Settings, bool>(
+              selector: (context, s) => s.enableBottomNavigationBar,
+              builder: (context, enableBottomNavBar, child) {
+                final canNavigate = context.select<ValueNotifier<AppMode>, bool>((v) => v.value.canNavigate);
+                final showBottomNavBar = canNavigate && enableBottomNavBar;
+                return Selector<SectionedListLayout<AvesEntry>, List<SectionLayout>>(
+                  selector: (context, layout) => layout.sectionLayouts,
+                  builder: (context, sectionLayouts, child) {
+                    final scrollController = widget.scrollController;
+                    final offsetIncrementSnapThreshold = context.select<TileExtentController, double>((v) => (v.extentNotifier.value + v.spacing) / 4);
+                    return DraggableScrollbar(
+                      backgroundColor: Colors.white,
+                      scrollThumbSize: AvesScrollThumb.thumbSize,
+                      scrollThumbBuilder: AvesScrollThumb.builder(
+                        height: AvesScrollThumb.thumbHeight,
+                        backgroundColor: Colors.white,
+                      ),
+                      controller: scrollController,
+                      dragOffsetSnapper: (scrollOffset, offsetIncrement) {
+                        if (offsetIncrement > offsetIncrementSnapThreshold && scrollOffset < scrollController.position.maxScrollExtent) {
+                          final section = sectionLayouts.firstWhereOrNull((section) => section.hasChildAtOffset(scrollOffset));
+                          if (section != null) {
+                            if (section.maxOffset - section.minOffset < scrollController.position.viewportDimension) {
+                              // snap to section header
+                              return section.minOffset;
+                            } else {
+                              // snap to content row
+                              final index = section.getMinChildIndexForScrollOffset(scrollOffset);
+                              return section.indexToLayoutOffset(index);
+                            }
+                          }
+                        }
+                        return scrollOffset;
+                      },
+                      scrollCrumbsBuilder: () => _getScrollCrumbs(sectionLayouts),
+                      padding: EdgeInsets.only(
+                        // padding to keep scroll thumb between app bar above and nav bar below
+                        top: appBarHeight,
+                        bottom: showBottomNavBar ? AppBottomNavBar.getHeightWithMargin(safeBottomPadding) : safeBottomPadding,
+                      ),
+                      labelTextBuilder: (offsetY) => CollectionDraggableThumbLabel(
+                        collection: collection,
+                        offsetY: offsetY,
+                      ),
+                      crumbTextBuilder: (label) => DraggableCrumbLabel(label: label),
+                      child: scrollView,
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildScrollView(Widget appBar, CollectionLens collection) {
+    return CustomScrollView(
+      key: widget.scrollableKey,
+      primary: true,
+      // workaround to prevent scrolling the app bar away
+      // when there is no content and we use `SliverFillRemaining`
+      physics: collection.isEmpty
+          ? const NeverScrollableScrollPhysics()
+          : SloppyScrollPhysics(
+              gestureSettings: MediaQuery.gestureSettingsOf(context),
+              parent: const AlwaysScrollableScrollPhysics(),
+            ),
+      scrollCacheExtent: ScrollCacheExtent.pixels(context.select<TileExtentController, double>((controller) => controller.effectiveExtentMax)),
+      slivers: [
+        appBar,
+        collection.isEmpty
+            ? SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildEmptyContent(collection),
+              )
+            : const SectionedListSliver<AvesEntry>(),
+        const NavBarPaddingSliver(),
+        const TvTileGridBottomPaddingSliver(),
+      ],
+    );
+  }
+
+  Widget _buildEmptyContent(CollectionLens collection) {
+    final source = collection.source;
+    return ValueListenableBuilder<SourceState>(
+      valueListenable: source.stateNotifier,
+      builder: (context, sourceState, child) {
+        if (sourceState == SourceState.loading) {
+          return LoadingEmptyContent(source: source);
+        }
+
+        return FutureBuilder<bool>(
+          future: _isStoragePermissionGranted,
+          builder: (context, snapshot) {
+            final granted = snapshot.data ?? true;
+            Widget? bottom = granted
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: AvesOutlinedButton(
+                      label: context.l10n.collectionEmptyGrantAccessButtonLabel,
+                      onPressed: () async {
+                        if (await openAppSettings()) {
+                          _checkingStoragePermission = true;
+                        }
+                      },
+                    ),
+                  );
+
+            if (collection.filters.any((filter) => filter is FavouriteFilter)) {
+              return EmptyContent(
+                icon: AIcons.favourite,
+                text: context.l10n.collectionEmptyFavourites,
+                bottom: bottom,
+              );
+            }
+            if (collection.filters.any((filter) => filter is MimeFilter && filter.mime == MimeTypes.anyVideo)) {
+              return EmptyContent(
+                icon: AIcons.video,
+                text: context.l10n.collectionEmptyVideos,
+                bottom: bottom,
+              );
+            }
+            return EmptyContent(
+              icon: AIcons.image,
+              text: context.l10n.collectionEmptyImages,
+              bottom: bottom,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _onCollectionChanged() {
+    _sanitizeSelection(context);
+  }
+
+  void _sanitizeSelection(BuildContext context) {
+    final selection = context.read<Selection<AvesEntry>?>();
+    if (selection == null || !selection.isSelecting) return;
+
+    // check whether selection items are still within the filtered collection
+    final collectionEntries = widget.collection.sortedEntries;
+    final toRemove = selection.selectedItems.whereNot(collectionEntries.contains).toSet();
+    if (toRemove.isNotEmpty) {
+      selection.removeFromSelection(toRemove);
+      if (selection.selectedItemCount == 0) {
+        selection.browse();
+      }
+    }
+  }
+
+  void _scrollToTop() => widget.scrollController.jumpTo(0);
+
+  void _onScrollChanged() {
+    widget.isScrollingNotifier.value = true;
+    _stopScrollMonitoringTimer();
+    _scrollMonitoringTimer = Timer(ADurations.collectionScrollMonitoringTimerDelay, () {
+      widget.isScrollingNotifier.value = false;
+    });
+  }
+
+  void _stopScrollMonitoringTimer() => _scrollMonitoringTimer?.cancel();
+
+  Map<double, String> _getScrollCrumbs(List<SectionLayout> sectionLayouts) {
+    final crumbs = <double, String>{};
+    if (sectionLayouts.length <= 1) return crumbs;
+
+    final maxOffset = sectionLayouts.last.maxOffset;
+    void addAlbums(CollectionLens collection, List<SectionLayout> sectionLayouts, Map<double, String> crumbs) {
+      final source = collection.source;
+      sectionLayouts.forEach((section) {
+        final directory = (section.sectionKey as EntryAlbumSectionKey).directory;
+        if (directory != null) {
+          final label = source.getStoredAlbumDisplayName(context, directory);
+          crumbs[section.minOffset / maxOffset] = label;
+        }
+      });
+    }
+
+    final collection = widget.collection;
+    switch (collection.sortFactor) {
+      case .date:
+        switch (collection.sectionFactor) {
+          case .album:
+            addAlbums(collection, sectionLayouts, crumbs);
+          case .month:
+          case .day:
+            final firstKey = sectionLayouts.first.sectionKey;
+            final lastKey = sectionLayouts.last.sectionKey;
+            if (firstKey is EntryDateSectionKey && lastKey is EntryDateSectionKey) {
+              if (firstKey != EntryDateSectionKey.unknown && lastKey != EntryDateSectionKey.unknown) {
+                final locale = settings.avesLocale;
+                final calendar = settings.calendar;
+                final calOps = calendar.ops;
+
+                final oldest = calOps.fromYearMonthDay(firstKey.year, firstKey.month, firstKey.day);
+                final newest = calOps.fromYearMonthDay(lastKey.year, lastKey.month, lastKey.day);
+
+                final dateFormatter = (newest.difference(oldest).inHumanDays).abs() > calendar.maxDaysInYear ? locale.y : locale.MMM;
+                String? lastLabel;
+                sectionLayouts.forEach((section) {
+                  final k = section.sectionKey as EntryDateSectionKey;
+                  if (k != EntryDateSectionKey.unknown) {
+                    final label = dateFormatter(calOps.fromYearMonthDay(k.year, k.month, k.day));
+                    if (label != lastLabel) {
+                      crumbs[section.minOffset / maxOffset] = label;
+                      lastLabel = label;
+                    }
+                  }
+                });
+              }
+            }
+          case .none:
+            break;
+          case .name:
+          case .rating:
+            throw UnimplementedError();
+        }
+      case .albumItemName:
+      case .path:
+        addAlbums(collection, sectionLayouts, crumbs);
+      case .rating:
+      case .size:
+      case .duration:
+        break;
+      case .chipName:
+      case .count:
+        throw UnimplementedError();
+    }
+    return crumbs;
+  }
+
+  Future<bool> get _isStoragePermissionGranted => Future.wait(Permissions.storage.map((v) => v.status)).then((v) => v.any((status) => status.isGranted));
+}

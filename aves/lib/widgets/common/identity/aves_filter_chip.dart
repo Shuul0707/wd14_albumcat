@@ -1,0 +1,417 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:aves/app_mode.dart';
+import 'package:aves/model/covers.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/filters/rating.dart';
+import 'package:aves/model/settings/enums/accessibility_animations.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/theme/colors.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/themes.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/collection/filter_bar.dart';
+import 'package:aves/widgets/common/basic/font_size_icon_theme.dart';
+import 'package:aves/widgets/common/basic/gestures/ink_well.dart';
+import 'package:aves/widgets/common/basic/popup/menu_row.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/providers/media_query_data_provider.dart';
+import 'package:aves/widgets/filter_grids/common/action_delegates/chip.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+typedef AFilterCallback<T extends CollectionFilter> = void Function(T filter);
+typedef OffsetFilterCallback<T extends CollectionFilter> = void Function(BuildContext context, T filter, Offset tapPosition);
+
+enum HeroType { always, onTap, never }
+
+@immutable
+class const AvesFilterDecoration({
+  required final Radius radius,
+  required final Widget widget,
+}) {
+  BorderRadius get textBorderRadius => BorderRadius.vertical(bottom: radius);
+
+  BorderRadius get chipBorderRadius => BorderRadius.all(radius);
+}
+
+class const AvesFilterChip({
+  super.key,
+  required final CollectionFilter filter,
+  final bool showLeading = true,
+  final bool showText = true,
+  final bool allowGenericIcon = true,
+  final bool useFilterColor = true,
+  final AvesFilterDecoration? decoration,
+  final Color? background,
+  final String? banner,
+  final Widget? leadingOverride,
+  final Widget? details,
+  final double padding = defaultPadding,
+  final double? maxWidth,
+  final HeroType heroType = HeroType.onTap,
+  final AFilterCallback? onTap,
+  final AFilterCallback? onRemove,
+  final OffsetFilterCallback? onLongPress = showDefaultLongPressMenu,
+}) extends StatefulWidget {
+  static const double defaultPadding = 6.0;
+  static const double defaultRadius = 32;
+  static const double outlineWidth = 2;
+  static const double minChipHeight = kMinInteractiveDimension;
+  static const double minChipWidth = kMinInteractiveDimension;
+  static const double iconSize = 18;
+  static const double fontSize = 14;
+  static const double decoratedContentVerticalPadding = 5;
+
+  static double computeMaxWidthForRow(
+    BuildContext context, {
+    required int minChipPerRow,
+    required double chipPadding,
+    required double rowPadding,
+  }) {
+    final mqWidth = MediaQuery.sizeOf(context).width;
+    final mqHorizontalPadding = MediaQuery.paddingOf(context).horizontal;
+    return (mqWidth - mqHorizontalPadding - chipPadding * minChipPerRow - rowPadding) / minChipPerRow;
+  }
+
+  static Future<void> showDefaultLongPressMenu(
+    BuildContext context,
+    CollectionFilter filter,
+    Offset tapPosition, {
+    bool? canNavigate,
+  }) async {
+    // remove focus, if any, to prevent the keyboard from showing up
+    // after the user is done with the popup menu
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final actions = <PopupMenuItem<ChipAction>>[];
+    final actionDelegate = ChipActionDelegate();
+    if (canNavigate ?? context.read<ValueNotifier<AppMode>>().value.canNavigate) {
+      actions.addAll(
+        ChipAction.values.where((action) => actionDelegate.isVisible(action, filter: filter)).map((action) {
+          late String text;
+          switch (action) {
+            case .reverse:
+              text = filter.reversed ? context.l10n.chipActionFilterIn : context.l10n.chipActionFilterOut;
+            case .ratingOrGreater:
+              text = RatingFilter.formatRatingRange(context, (filter as RatingFilter).rating, RatingFilter.opOrGreater);
+            case .ratingOrLower:
+              text = RatingFilter.formatRatingRange(context, (filter as RatingFilter).rating, RatingFilter.opOrLower);
+            default:
+              text = action.getText(context);
+          }
+          return PopupMenuItem(
+            value: action,
+            child: FontSizeIconTheme(
+              child: MenuRow(text: text, icon: action.getIcon()),
+            ),
+          );
+        }),
+      );
+    }
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    const touchArea = Size(kMinInteractiveDimension, kMinInteractiveDimension);
+    final animations = context.read<Settings>().accessibilityAnimations;
+    final selectedAction = await showMenu<ChipAction>(
+      context: context,
+      position: RelativeRect.fromRect(tapPosition & touchArea, Offset.zero & overlay.size),
+      items: [
+        PopupMenuItem(
+          child: Text(filter.getTooltip(context)),
+        ),
+        if (actions.isNotEmpty) ...[
+          const PopupMenuDivider(),
+          ...actions,
+        ],
+      ],
+      popUpAnimationStyle: animations.popUpAnimationStyle,
+    );
+    if (selectedAction != null) {
+      // wait for the popup menu to hide before proceeding with the action
+      await Future.delayed(animations.popUpAnimationDelay * timeDilation);
+      actionDelegate.onActionSelected(context, filter, selectedAction);
+    }
+  }
+
+  @override
+  State<AvesFilterChip> createState() => _AvesFilterChipState();
+}
+
+class _AvesFilterChipState extends State<AvesFilterChip> {
+  final Set<StreamSubscription> _subscriptions = {};
+  late Color _outlineColor;
+  late bool _tapped;
+  Offset? _tapPosition;
+
+  CollectionFilter get filter => widget.filter;
+
+  double get padding => widget.padding;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapped = false;
+    _subscriptions.add(covers.packageChangeStream.listen(_onCoverColorChanged));
+    _subscriptions.add(covers.colorChangeStream.listen(_onCoverColorChanged));
+    _subscriptions.add(
+      settings.updateStream.where((event) => event.key == SettingKeys.themeColorModeKey).listen((_) {
+        // delay so that contextual colors reflect the new settings
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _onCoverColorChanged(null);
+        });
+      }),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _initColorLoader();
+  }
+
+  @override
+  void didUpdateWidget(covariant AvesFilterChip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != filter) {
+      _initColorLoader();
+      _tapped = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscriptions
+      ..forEach((sub) => sub.cancel())
+      ..clear();
+    super.dispose();
+  }
+
+  void _initColorLoader() {
+    _outlineColor = context.read<AvesColorsData>().neutral;
+  }
+
+  void _onCoverColorChanged(Set<CollectionFilter>? event) {
+    if (event == null || event.contains(filter)) {
+      _initColorLoader();
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final decoration = widget.decoration;
+    final chipBackground = widget.background ?? Themes.firstLayerColor(context);
+
+    final onTap = widget.onTap != null
+        ? () {
+            WidgetsBinding.instance.addPostFrameCallback((_) => widget.onTap?.call(filter));
+            setState(() => _tapped = true);
+          }
+        : null;
+    final onRemove = widget.onRemove != null
+        ? () {
+            WidgetsBinding.instance.addPostFrameCallback((_) => widget.onRemove?.call(filter));
+            setState(() => _tapped = true);
+          }
+        : null;
+    final onLongPress = widget.onLongPress != null
+        ? Feedback.wrapForLongPress(() {
+            if (_tapPosition != null) {
+              widget.onLongPress?.call(context, filter, _tapPosition!);
+            }
+          }, context)
+        : null;
+
+    Widget? content;
+    final showLeading = widget.showLeading;
+    final showText = widget.showText;
+    if (showLeading || showText) {
+      final textScaler = MediaQuery.textScalerOf(context);
+      final iconSize = textScaler.scale(AvesFilterChip.iconSize);
+      final leading = showLeading ? widget.leadingOverride ?? filter.iconBuilder(context, iconSize, allowGenericIcon: widget.allowGenericIcon) : null;
+      final trailing = onRemove != null
+          ? Theme(
+              data: Theme.of(context).copyWith(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: IconButton(
+                icon: Icon(AIcons.clear, size: iconSize),
+                padding: EdgeInsets.zero,
+                splashRadius: IconTheme.of(context).size,
+                constraints: const BoxConstraints(),
+                onPressed: onRemove,
+              ),
+            )
+          : null;
+
+      content = Row(
+        mainAxisSize: decoration != null ? .max : .min,
+        mainAxisAlignment: .center,
+        children: [
+          ?leading,
+          if (leading != null && showText) SizedBox(width: padding),
+          if (showText)
+            Flexible(
+              // label can be multiline (e.g. coordinates)
+              child: Text(
+                filter.getLabel(context),
+                style: TextStyle(
+                  fontSize: AvesFilterChip.fontSize,
+                  decoration: filter.reversed ? TextDecoration.lineThrough : null,
+                  decorationThickness: 2,
+                ),
+                softWrap: false,
+                overflow: .fade,
+              ),
+            ),
+          if (trailing != null) ...[
+            SizedBox(width: padding),
+            trailing,
+          ],
+        ],
+      );
+
+      final details = widget.details;
+      if (details != null) {
+        content = Column(
+          mainAxisSize: .min,
+          children: [
+            content,
+            Flexible(child: details),
+          ],
+        );
+      }
+
+      if (decoration != null) {
+        content = Align(
+          alignment: .bottomCenter,
+          child: ClipRRect(
+            borderRadius: decoration.textBorderRadius,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: padding * 2, vertical: AvesFilterChip.decoratedContentVerticalPadding),
+              color: chipBackground,
+              child: content,
+            ),
+          ),
+        );
+      } else {
+        content = Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding * 2),
+          child: content,
+        );
+      }
+    }
+
+    final borderRadius = decoration?.chipBorderRadius ?? const BorderRadius.all(Radius.circular(AvesFilterChip.defaultRadius));
+    final banner = widget.banner;
+    Widget chip = Container(
+      constraints: BoxConstraints(
+        minWidth: AvesFilterChip.minChipWidth,
+        maxWidth: max(
+          AvesFilterChip.minChipWidth,
+          widget.maxWidth ??
+              AvesFilterChip.computeMaxWidthForRow(
+                context,
+                minChipPerRow: 2,
+                chipPadding: FilterBar.chipPadding.horizontal,
+                rowPadding: FilterBar.rowPadding.horizontal,
+              ),
+        ),
+        minHeight: AvesFilterChip.minChipHeight,
+      ),
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          if (decoration != null)
+            ClipRRect(
+              borderRadius: decoration.chipBorderRadius,
+              child: decoration.widget,
+            ),
+          Material(
+            color: decoration != null ? Colors.transparent : chipBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: borderRadius,
+            ),
+            child: AInkResponse(
+              // as of Flutter v2.8.0, `InkWell` does not have `onLongPressStart` like `GestureDetector`,
+              // so we get the long press details from the tap instead
+              onTapDown: onLongPress != null ? (details) => _tapPosition = details.globalPosition : null,
+              onTap: onTap,
+              onLongPress: onLongPress,
+              containedInkWell: true,
+              highlightShape: BoxShape.rectangle,
+              borderRadius: borderRadius,
+              longPressTimeout: settings.longPressTimeout,
+              child: FutureBuilder<Color>(
+                future: filter.color(context),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    _outlineColor = snapshot.data!;
+                  }
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.fromBorderSide(
+                        BorderSide(
+                          color: widget.useFilterColor ? _outlineColor : context.select<AvesColorsData, Color>((v) => v.neutral),
+                          width: AvesFilterChip.outlineWidth,
+                        ),
+                      ),
+                      borderRadius: borderRadius,
+                    ),
+                    position: DecorationPosition.foreground,
+                    child: content,
+                  );
+                },
+              ),
+            ),
+          ),
+          if (banner != null)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final scale = (constraints.maxHeight / 90 - .4).clamp(.45, 1.0);
+                return ClipRRect(
+                  borderRadius: borderRadius,
+                  child: Align(
+                    // align to corner the scaled down banner in RTL
+                    alignment: .topStart,
+                    child: Transform(
+                      transform: Matrix4.identity().scaledByDouble(scale, scale, scale, 1),
+                      child: Banner(
+                        message: banner.toUpperCase(),
+                        location: .topStart,
+                        color: Theme.of(context).colorScheme.primary,
+                        child: const SizedBox(),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+
+    final animate = context.select<Settings, bool>((v) => v.animate);
+    if (animate) {
+      final heroType = widget.heroType;
+      if (heroType == HeroType.always || (heroType == HeroType.onTap && _tapped)) {
+        chip = Hero(
+          tag: filter,
+          transitionOnUserGestures: true,
+          child: MediaQueryDataProvider(
+            child: DefaultTextStyle(
+              style: const TextStyle(),
+              child: chip,
+            ),
+          ),
+        );
+      }
+    }
+    return chip;
+  }
+}

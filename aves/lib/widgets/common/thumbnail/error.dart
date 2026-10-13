@@ -1,0 +1,76 @@
+import 'dart:io';
+import 'dart:math';
+
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/model/entry/extensions/props.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/themes.dart';
+import 'package:aves/utils/mime_utils.dart';
+import 'package:flutter/foundation.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const ErrorThumbnail({
+  super.key,
+  required final AvesEntry entry,
+  required final double extent,
+}) extends StatefulWidget {
+  @override
+  State<ErrorThumbnail> createState() => _ErrorThumbnailState();
+}
+
+class _ErrorThumbnailState extends State<ErrorThumbnail> {
+  late Future<bool> _exists;
+
+  AvesEntry get entry => widget.entry;
+
+  double get extent => widget.extent;
+
+  @override
+  void initState() {
+    super.initState();
+    final path = entry.storagePath;
+    _exists = path != null ? File(path).exists() : SynchronousFuture(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Themes.backgroundTextColor(context);
+    return FutureBuilder<bool>(
+      future: _exists,
+      builder: (context, snapshot) {
+        Widget child;
+        if (snapshot.connectionState != ConnectionState.done) {
+          child = const SizedBox();
+        } else {
+          final exists = snapshot.data!;
+          child = exists
+              ? LayoutBuilder(
+                  builder: (context, constraints) {
+                    final fontSize = min(extent, constraints.biggest.width) / 5;
+                    return Text(
+                      MimeUtils.displayType(entry.mimeType),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: fontSize,
+                      ),
+                      textAlign: .center,
+                    );
+                  },
+                )
+              : Icon(
+                  AIcons.broken,
+                  size: extent / 2,
+                  color: color,
+                );
+        }
+        return Container(
+          alignment: .center,
+          color: Themes.firstLayerColor(context),
+          width: extent,
+          height: extent,
+          child: child,
+        );
+      },
+    );
+  }
+}

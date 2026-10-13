@@ -1,0 +1,16 @@
+enum ChipAction {
+  goToAlbumPage,
+  goToCountryPage,
+  goToPlacePage,
+  goToTagPage,
+  goToExplorerPage,
+  ratingOrGreater,
+  ratingOrLower,
+  copyCenterCoordinates,
+  decompose,
+  reverse,
+  hide,
+  show,
+  lockVault,
+  debug,
+}

@@ -1,0 +1,194 @@
+class MimeTypes {
+  static const anyImage = 'image/*';
+
+  // supported
+  static const avif = 'image/avif';
+  static const bmp = 'image/bmp';
+  static const bmpX = 'image/x-ms-bmp';
+  static const gif = 'image/gif';
+  static const heic = 'image/heic';
+  static const heif = 'image/heif';
+  static const ico = 'image/ico';
+  static const icoX = 'image/x-icon';
+  static const jpeg = 'image/jpeg';
+  static const png = 'image/png';
+  static const svg = 'image/svg+xml';
+  static const tiff = 'image/tiff';
+  static const webp = 'image/webp';
+  static const wbmp = 'image/vnd.wap.wbmp';
+
+  // unsupported
+  static const aces = 'image/aces'; // https://en.wikipedia.org/wiki/Academy_Color_Encoding_System
+  static const art = 'image/x-jg';
+  static const cdr = 'image/x-coreldraw';
+  static const cdrt = 'image/x-coreldrawtemplate';
+  static const cpt = 'image/x-corelphotopaint';
+  static const djvu = 'image/vnd.djvu';
+  static const dwg = 'image/vnd.dwg';
+  static const dxf = 'image/vnd.dxf';
+  static const emf = 'image/emf'; // https://en.wikipedia.org/wiki/Windows_Metafile
+  static const fits = 'image/fits'; // https://en.wikipedia.org/wiki/FITS
+  static const jng = 'image/x-jng';
+  static const jpeg2000 = 'image/jp2';
+  static const jpx = 'image/jpx';
+  static const jxl = 'image/jxl';
+  static const pat = 'image/x-coreldrawpattern';
+  static const pcx = 'image/pcx'; // https://en.wikipedia.org/wiki/PCX
+  static const pcxX = 'image/x-pcx'; // https://en.wikipedia.org/wiki/PCX
+  static const pbm = 'image/x-portable-bitmap'; // https://en.wikipedia.org/wiki/Netpbm
+  static const pgm = 'image/x-portable-graymap'; // https://en.wikipedia.org/wiki/Netpbm
+  static const pnm = 'image/x-portable-anymap'; // https://en.wikipedia.org/wiki/Netpbm
+  static const ppm = 'image/x-portable-pixmap'; // https://en.wikipedia.org/wiki/Netpbm
+  static const psdVnd = 'image/vnd.adobe.photoshop';
+  static const psdX = 'image/x-photoshop';
+  static const ras = 'image/x-cmu-raster';
+  static const rgb = 'image/x-rgb'; // ?
+  static const rgbe = 'image/vnd.radiance';
+  static const sgif = 'image/vnd.sealedmedia.softseal.gif';
+  static const tap = 'image/vnd.tencent.tap';
+  static const vtf = 'image/vnd.valve.source.texture';
+  static const wmf = 'image/wmf'; // https://en.wikipedia.org/wiki/Windows_Metafile
+  static const xbm = 'image/x-xbitmap'; // https://en.wikipedia.org/wiki/X_BitMap
+  static const xpm = 'image/x-xpixmap'; // https://en.wikipedia.org/wiki/X_PixMap
+  static const xwd = 'image/x-xwindowdump'; // https://en.wikipedia.org/wiki/Xwd
+
+  // RAW
+  static const arw = 'image/x-sony-arw';
+  static const cr2 = 'image/x-canon-cr2';
+  static const crw = 'image/x-canon-crw';
+  static const dcr = 'image/x-kodak-dcr';
+  static const dcraw = 'image/x-dcraw';
+  static const dng = 'image/dng';
+  static const dngX = 'image/x-adobe-dng';
+  static const erf = 'image/x-epson-erf';
+  static const k25 = 'image/x-kodak-k25';
+  static const kdc = 'image/x-kodak-kdc';
+  static const mrw = 'image/x-minolta-mrw';
+  static const nef = 'image/x-nikon-nef';
+  static const nrw = 'image/x-nikon-nrw';
+  static const orf = 'image/x-olympus-orf';
+  static const pef = 'image/x-pentax-pef';
+  static const raf = 'image/x-fuji-raf';
+  static const raw = 'image/x-panasonic-raw';
+  static const rw2 = 'image/x-panasonic-rw2';
+  static const sr2 = 'image/x-sony-sr2';
+  static const srf = 'image/x-sony-srf';
+  static const srw = 'image/x-samsung-srw';
+  static const x3f = 'image/x-sigma-x3f';
+
+  static const anyVideo = 'video/*';
+
+  static const v3gpp = 'video/3gpp';
+  static const asf = 'video/x-ms-asf'; // https://en.wikipedia.org/wiki/Advanced_Systems_Format
+  static const avc = 'video/avc'; // https://en.wikipedia.org/wiki/Advanced_Video_Coding
+  static const avi = 'video/avi'; // https://en.wikipedia.org/wiki/Audio_Video_Interleave
+  static const aviMSVideo = 'video/msvideo'; // https://en.wikipedia.org/wiki/Audio_Video_Interleave
+  static const aviVnd = 'video/vnd.avi'; // https://en.wikipedia.org/wiki/Audio_Video_Interleave
+  static const aviXMSVideo = 'video/x-msvideo'; // https://en.wikipedia.org/wiki/Audio_Video_Interleave
+  static const dl = 'video/dl';
+  static const dv = 'video/dv';
+  static const dvd = 'video/dvd';
+  static const flic = 'video/fli'; // https://en.wikipedia.org/wiki/FLIC_(file_format)
+  static const flv = 'video/flv';
+  static const flvX = 'video/x-flv';
+  static const gl = 'video/gl';
+  static const lsf = 'video/x-la-asf';
+  static const m4s = 'video/iso.segment';
+  static const mkv = 'video/mkv';
+  static const mkvX = 'video/x-matroska';
+  static const mov = 'video/quicktime';
+  static const movX = 'video/x-quicktime';
+  static const mp2p = 'video/mp2p';
+  static const mp2t = 'video/mp2t'; // .m2ts, .ts
+  static const mp2ts = 'video/mp2ts'; // .ts (prefer `mp2t` when possible)
+  static const mp4 = 'video/mp4';
+  static const mpeg = 'video/mpeg';
+  static const ogv = 'video/ogg';
+  static const realVideo = 'video/x-pn-realvideo';
+  static const webm = 'video/webm';
+  static const wm = 'video/x-ms-wm';
+  static const wmv = 'video/x-ms-wmv';
+
+  // non-media
+  static const csv = 'text/csv';
+  static const gpx = 'application/gpx+xml';
+  static const json = 'application/json';
+  static const octetStream = 'application/octet-stream';
+  static const plainText = 'text/plain';
+  static const sqlite3 = 'application/vnd.sqlite3';
+  static const zip = 'application/zip';
+
+  // groups
+
+  // formats that support transparency
+  static const Set<String> alphaImages = {avif, bmp, bmpX, gif, heic, heif, ico, icoX, png, svg, tiff, webp};
+
+  static const Set<String> rawImages = {arw, cr2, crw, dcr, dcraw, dng, dngX, erf, k25, kdc, mrw, nef, nrw, orf, pef, raf, raw, rw2, sr2, srf, srw, x3f};
+
+  static const Set<String> developedRawImages = {jpeg, heic, heif};
+
+  static bool canHaveAlpha(String mimeType) => MimeTypes.alphaImages.contains(mimeType);
+
+  static bool isRaw(String mimeType) => MimeTypes.rawImages.contains(mimeType);
+
+  static bool isImage(String mimeType) => mimeType.startsWith('image');
+
+  static bool isVideo(String mimeType) => mimeType.startsWith('video');
+
+  static bool isVisual(String mimeType) => isImage(mimeType) || isVideo(mimeType);
+
+  static String normalize(String mimeType) {
+    switch (mimeType) {
+      case avi:
+      case aviMSVideo:
+      case aviVnd:
+      case aviXMSVideo:
+        return avi;
+      case bmp:
+      case bmpX:
+        return bmp;
+      case flv:
+      case flvX:
+        return flv;
+      case heic:
+      case heif:
+        return heic;
+      case mov:
+      case movX:
+        return mov;
+      case psdVnd:
+      case psdX:
+        return psdVnd;
+      default:
+        return mimeType;
+    }
+  }
+
+  static bool refersToSameType(String a, b) => normalize(a) == normalize(b);
+
+  static String? forExtension(String extension) {
+    switch (extension) {
+      case '.jpg':
+        return jpeg;
+      case '.svg':
+        return svg;
+    }
+    return null;
+  }
+
+  static const Map<String, String> _defaultExtensions = {
+    bmp: '.bmp',
+    csv: '.csv',
+    gif: '.gif',
+    gpx: '.gpx',
+    jpeg: '.jpg',
+    json: '.json',
+    plainText: '.txt',
+    png: '.png',
+    sqlite3: '.db',
+    svg: '.svg',
+    webp: '.webp',
+  };
+
+  static String? extensionFor(String mimeType) => _defaultExtensions[mimeType];
+}

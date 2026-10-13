@@ -1,0 +1,140 @@
+import 'dart:async';
+
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/services/common/channel.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves_utils/aves_utils.dart';
+import 'package:aves_video/aves_video.dart';
+import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:get_it/get_it.dart';
+
+abstract class MediaSessionService {
+  Stream<MediaCommandEvent> get mediaCommands;
+
+  Future<void> update({
+    required AvesEntry entry,
+    required AvesVideoController controller,
+    required bool canSkipToNext,
+    required bool canSkipToPrevious,
+  });
+
+  Future<void> release();
+}
+
+class PlatformMediaSessionService implements MediaSessionService, Disposable {
+  static const _sessionChannel = AvesMethodChannel(AvesChannels.mediaSession);
+
+  final Set<StreamSubscription> _subscriptions = {};
+  final EventChannel _commandChannel = const OptionalEventChannel('deckers.thibault/aves/media_command');
+  final StreamController _streamController = StreamController.broadcast();
+
+  new() {
+    _subscriptions.add(_commandChannel.receiveBroadcastStream().listen((event) => _onMediaCommand(event as Map?)));
+  }
+
+  @override
+  void onDispose() {
+    _subscriptions
+      ..forEach((sub) => sub.cancel())
+      ..clear();
+  }
+
+  @override
+  Stream<MediaCommandEvent> get mediaCommands => _streamController.stream.where((event) => event is MediaCommandEvent).cast<MediaCommandEvent>();
+
+  @override
+  Future<void> update({
+    required AvesEntry entry,
+    required AvesVideoController controller,
+    required bool canSkipToNext,
+    required bool canSkipToPrevious,
+  }) async {
+    try {
+      await _sessionChannel.invokeMethod('update', <String, Object?>{
+        'uri': entry.uri,
+        'title': entry.bestTitle,
+        'durationMillis': controller.duration,
+        'state': _toPlatformState(controller.status),
+        'positionMillis': controller.currentPosition,
+        'playbackSpeed': controller.speed,
+        'canSkipToNext': canSkipToNext,
+        'canSkipToPrevious': canSkipToPrevious,
+      });
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+
+  @override
+  Future<void> release() async {
+    try {
+      await _sessionChannel.invokeMethod('release');
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+
+  String _toPlatformState(PlaybackStatus status) {
+    switch (status) {
+      case .paused:
+        return 'paused';
+      case .playing:
+        return 'playing';
+      case .idle:
+      case .initialized:
+      case .completed:
+      case .error:
+        return 'stopped';
+    }
+  }
+
+  void _onMediaCommand(Map? fields) {
+    if (fields == null) return;
+    final command = fields['command'] as String?;
+    MediaCommandEvent? event;
+    switch (command) {
+      case 'play':
+        event = const MediaCommandEvent(MediaCommand.play);
+      case 'pause':
+        event = const MediaCommandEvent(MediaCommand.pause);
+      case 'skip_to_next':
+        event = const MediaCommandEvent(MediaCommand.skipToNext);
+      case 'skip_to_previous':
+        event = const MediaCommandEvent(MediaCommand.skipToPrevious);
+      case 'stop':
+        event = const MediaCommandEvent(MediaCommand.stop);
+      case 'seek':
+        final position = fields['position'] as int?;
+        if (position != null) {
+          event = MediaSeekCommandEvent(MediaCommand.stop, position: position);
+        }
+    }
+    if (event != null) {
+      _streamController.add(event);
+    }
+  }
+}
+
+enum MediaCommand { play, pause, skipToNext, skipToPrevious, stop, seek }
+
+@immutable
+class MediaCommandEvent extends Equatable {
+  final MediaCommand command;
+
+  @override
+  List<Object?> get props => [command];
+
+  const new(this.command);
+}
+
+@immutable
+class MediaSeekCommandEvent extends MediaCommandEvent {
+  final int position;
+
+  @override
+  List<Object?> get props => [...super.props, position];
+
+  const new(super.command, {required this.position});
+}

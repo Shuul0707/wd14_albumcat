@@ -1,0 +1,103 @@
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:aves/model/entry/entry.dart';
+import 'package:aves/model/entry/extensions/images.dart';
+import 'package:aves/model/settings/enums/widget_shape.dart';
+import 'package:aves/theme/colors.dart';
+import 'package:aves/widgets/common/identity/aves_filter_chip.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:material_ui/material_ui.dart';
+
+class HomeWidgetPainter {
+  final AvesEntry? entry;
+  final double devicePixelRatio;
+
+  // do not use `AlignmentDirectional` as there is no `TextDirection` in context
+  static const backgroundGradient = LinearGradient(
+    begin: .bottomLeft,
+    end: .topRight,
+    colors: AColors.boraBoraGradient,
+  );
+
+  new({
+    required this.entry,
+    required this.devicePixelRatio,
+  });
+
+  Future<Uint8List> drawWidget({
+    required Size sizeDip,
+    required double? cornerRadiusPx,
+    required Color? outline,
+    required WidgetShape shape,
+    ui.ImageByteFormat format = ui.ImageByteFormat.rawRgba,
+  }) async {
+    final widthPx = sizeDip.width * devicePixelRatio;
+    final heightPx = sizeDip.height * devicePixelRatio;
+    final widgetSizePx = Size(widthPx, heightPx);
+    debugPrint('Draw widget for ${sizeDip.width}x${sizeDip.height} dp (${widgetSizePx.width}x${widgetSizePx.height} px), entry=$entry');
+    final ui.Image? entryImage;
+    if (entry != null) {
+      final extent = shape.extentPx(widgetSizePx, entry!) / devicePixelRatio;
+      entryImage = await _getEntryImage(entry, extent);
+    } else {
+      entryImage = null;
+    }
+
+    final recorder = ui.PictureRecorder();
+    final rect = Offset.zero & widgetSizePx;
+    final canvas = Canvas(recorder, rect);
+    final path = shape.path(widgetSizePx, devicePixelRatio, cornerRadiusPx: cornerRadiusPx);
+    canvas.clipPath(path);
+    if (entryImage != null) {
+      canvas.drawImage(entryImage, Offset(widgetSizePx.width - entryImage.width, widgetSizePx.height - entryImage.height) / 2, Paint());
+      entryImage.dispose();
+    } else {
+      canvas.drawPaint(Paint()..shader = backgroundGradient.createShader(rect));
+    }
+    if (outline != null) {
+      drawOutline(canvas, path, devicePixelRatio, outline);
+    }
+
+    final picture = recorder.endRecording();
+    final widgetImage = await picture.toImage(widthPx.round(), heightPx.round());
+    picture.dispose();
+
+    final imageData = await widgetImage.toByteData(format: format);
+    widgetImage.dispose();
+    return imageData?.buffer.asUint8List() ?? Uint8List(0);
+  }
+
+  static void drawOutline(ui.Canvas canvas, ui.Path outlinePath, double devicePixelRatio, Color color) {
+    canvas.drawPath(
+      outlinePath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..color = color
+        ..strokeWidth = AvesFilterChip.outlineWidth * devicePixelRatio * 2
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  Future<ui.Image?> _getEntryImage(AvesEntry? entry, double extent) async {
+    if (entry == null) return null;
+
+    final provider = entry.getThumbnail(extent: extent);
+
+    final imageInfoCompleter = Completer<ImageInfo?>();
+    final imageStream = provider.resolve(ImageConfiguration.empty);
+    final imageStreamListener = ImageStreamListener((image, synchronousCall) async {
+      imageInfoCompleter.complete(image);
+    }, onError: imageInfoCompleter.completeError);
+    imageStream.addListener(imageStreamListener);
+    ImageInfo? regionImageInfo;
+    try {
+      regionImageInfo = await imageInfoCompleter.future;
+    } catch (error) {
+      debugPrint('failed to get widget image for entry=$entry with error=$error');
+    }
+    imageStream.removeListener(imageStreamListener);
+    return regionImageInfo?.image;
+  }
+}

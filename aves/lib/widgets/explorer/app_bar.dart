@@ -1,0 +1,230 @@
+import 'dart:async';
+
+import 'package:aves/app_mode.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/filters/path.dart';
+import 'package:aves/model/settings/enums/accessibility_animations.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/utils/android_file_utils.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves/widgets/collection/collection_page.dart';
+import 'package:aves/widgets/common/bars/app_bar_subtitle.dart';
+import 'package:aves/widgets/common/bars/app_bar_title.dart';
+import 'package:aves/widgets/common/bars/crumb_line.dart';
+import 'package:aves/widgets/common/basic/font_size_icon_theme.dart';
+import 'package:aves/widgets/common/basic/popup/menu_row.dart';
+import 'package:aves/widgets/common/basic/text/fading_line.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/bars/app_bar.dart';
+import 'package:aves/widgets/common/identity/aves_filter_chip.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:aves/widgets/dialogs/select_storage_dialog.dart';
+import 'package:aves/widgets/explorer/crumb_line.dart';
+import 'package:aves/widgets/explorer/explorer_action_delegate.dart';
+import 'package:aves/widgets/search/collection_search_page_route.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+class ExplorerAppBar extends StatefulWidget {
+  final ValueNotifier<VolumeRelativeDirectory?> directoryNotifier;
+  final void Function(VolumeRelativeDirectory? dir) goToDir;
+
+  const new({
+    super.key,
+    required this.directoryNotifier,
+    required this.goToDir,
+  });
+
+  @override
+  State<ExplorerAppBar> createState() => _ExplorerAppBarState();
+}
+
+class _ExplorerAppBarState extends State<ExplorerAppBar> with WidgetsBindingObserver {
+  Set<StorageVolume> get _volumes => androidFileUtils.storageVolumes;
+
+  String? _pathOf(VolumeRelativeDirectory? dir) => dir != null ? pContext.join(dir.volumePath, dir.relativeDir) : null;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AvesAppBar(
+      contentHeight: appBarContentHeight,
+      pinned: false,
+      leading: const DrawerButton(),
+      title: _buildAppBarTitle(context),
+      actions: _buildActions,
+      bottom: LayoutBuilder(
+        builder: (context, constraints) {
+          return Container(
+            padding: CrumbLine.padding,
+            width: constraints.maxWidth,
+            height: CrumbLine.getPreferredHeight(MediaQuery.textScalerOf(context)),
+            child: ValueListenableBuilder<VolumeRelativeDirectory?>(
+              valueListenable: widget.directoryNotifier,
+              builder: (context, contentsDirectory, child) {
+                WidgetBuilder? lastCrumbBuilder;
+                final canNavigate = context.select<ValueNotifier<AppMode>, bool>((v) => v.value.canNavigate);
+                if (canNavigate) {
+                  final dirPath = _pathOf(contentsDirectory);
+                  if (dirPath != null) {
+                    lastCrumbBuilder = (context) => AvesFilterChip(
+                      filter: PathFilter(dirPath),
+                      onTap: (filter) => _goToCollectionPage(context, filter),
+                      onLongPress: null,
+                    );
+                  }
+                }
+                return ExplorerCrumbLine(
+                  key: const Key('crumbs'),
+                  directory: contentsDirectory,
+                  onTap: widget.goToDir,
+                  lastCrumbBuilder: lastCrumbBuilder,
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  InteractiveAppBarTitle _buildAppBarTitle(BuildContext context) {
+    final appMode = context.watch<ValueNotifier<AppMode>>().value;
+    Widget title = FadingLine(context.l10n.explorerPageTitle);
+    if (appMode == .main) {
+      title = SourceStateAwareAppBarTitle(
+        title: title,
+        source: context.read<CollectionSource>(),
+      );
+    }
+    return InteractiveAppBarTitle(
+      onTap: () => _goToSearch(context),
+      child: title,
+    );
+  }
+
+  List<Widget> _buildActions(BuildContext context, double maxWidth) {
+    final animations = context.select<Settings, AccessibilityAnimations>((v) => v.accessibilityAnimations);
+    return [
+      IconButton(
+        icon: const Icon(AIcons.search),
+        onPressed: () => _goToSearch(context),
+        tooltip: MaterialLocalizations.of(context).searchFieldLabel,
+      ),
+      if (_volumes.length > 1) _buildVolumeSelector(context),
+      PopupMenuButton<ExplorerAction>(
+        itemBuilder: (context) {
+          return [
+            ExplorerAction.addShortcut,
+            ExplorerAction.setHome,
+            ExplorerAction.hide,
+            null,
+            ExplorerAction.stats,
+          ].map<PopupMenuEntry<ExplorerAction>>((v) {
+            if (v == null) return const PopupMenuDivider();
+            return PopupMenuItem(
+              value: v,
+              child: MenuRow(text: v.getText(context), icon: v.getIcon()),
+            );
+          }).toList();
+        },
+        onSelected: (action) async {
+          // wait for the popup menu to hide before proceeding with the action
+          await Future.delayed(animations.popUpAnimationDelay * timeDilation);
+          final directory = widget.directoryNotifier.value;
+          if (directory != null) {
+            ExplorerActionDelegate(directory: directory).onActionSelected(context, action);
+          }
+        },
+        popUpAnimationStyle: animations.popUpAnimationStyle,
+      ),
+    ].map((v) => FontSizeIconTheme(child: v)).toList();
+  }
+
+  Widget _buildVolumeSelector(BuildContext context) {
+    if (_volumes.length == 2) {
+      return ValueListenableBuilder<VolumeRelativeDirectory?>(
+        valueListenable: widget.directoryNotifier,
+        builder: (context, directory, child) {
+          final currentVolume = directory?.volumePath;
+          final otherVolume = _volumes.firstWhere((volume) => volume.path != currentVolume);
+          final icon = otherVolume.isRemovable ? AIcons.storageCard : AIcons.storageMain;
+          return IconButton(
+            icon: Icon(icon),
+            onPressed: () => widget.goToDir(VolumeRelativeDirectory.volume(otherVolume)),
+            tooltip: otherVolume.getDescription(context),
+          );
+        },
+      );
+    } else {
+      return IconButton(
+        icon: const Icon(AIcons.storageCard),
+        onPressed: () async {
+          _volumes.map((v) {
+            final selected = widget.directoryNotifier.value?.volumePath == v.path;
+            final icon = v.isRemovable ? AIcons.storageCard : AIcons.storageMain;
+            return PopupMenuItem(
+              value: v,
+              enabled: !selected,
+              child: MenuRow(
+                text: v.getDescription(context),
+                icon: Icon(icon),
+              ),
+            );
+          }).toList();
+          final volumePath = widget.directoryNotifier.value?.volumePath;
+          final initialVolume = _volumes.firstWhereOrNull((v) => v.path == volumePath);
+          final volume = await showAvesDialog<StorageVolume?>(
+            context: context,
+            builder: (context) => SelectStorageDialog(initialVolume: initialVolume),
+            routeSettings: const RouteSettings(name: SelectStorageDialog.routeName),
+          );
+          if (volume != null) {
+            widget.goToDir(VolumeRelativeDirectory.volume(volume));
+          }
+        },
+        tooltip: context.l10n.explorerActionSelectStorageVolume,
+      );
+    }
+  }
+
+  double get appBarContentHeight {
+    final textScaler = MediaQuery.textScalerOf(context);
+    return textScaler.scale(kToolbarHeight) + CrumbLine.getPreferredHeight(textScaler);
+  }
+
+  void _goToSearch(BuildContext context) {
+    Navigator.maybeOf(context)?.push(
+      CollectionSearchPageRoute(context: context),
+    );
+  }
+
+  void _goToCollectionPage(BuildContext context, CollectionFilter filter) {
+    Navigator.maybeOf(context)?.push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: CollectionPage.routeName),
+        builder: (context) => CollectionPage(
+          source: context.read<CollectionSource>(),
+          filters: {filter},
+        ),
+      ),
+    );
+  }
+}

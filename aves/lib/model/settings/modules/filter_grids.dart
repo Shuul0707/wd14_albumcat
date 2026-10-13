@@ -1,0 +1,121 @@
+import 'package:aves/model/filters/container/dynamic_album.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/grouping/common.dart';
+import 'package:aves/model/settings/defaults.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:aves_utils/aves_utils.dart';
+import 'package:synchronized/synchronized.dart';
+
+mixin FilterGridsSettings on SettingsAccess {
+  ChipSectionFactor get albumSectionFactor => getEnumOrDefault(SettingKeys.albumSectionFactorKey, SettingsDefaults.chipSectionFactor, ChipSectionFactor.values);
+
+  set albumSectionFactor(ChipSectionFactor newValue) => set(SettingKeys.albumSectionFactorKey, newValue.name);
+
+  ChipSectionFactor get tagSectionFactor => getEnumOrDefault(SettingKeys.tagSectionFactorKey, SettingsDefaults.chipSectionFactor, ChipSectionFactor.values);
+
+  set tagSectionFactor(ChipSectionFactor newValue) => set(SettingKeys.tagSectionFactorKey, newValue.name);
+
+  SortFactor get albumSortFactor => getEnumOrDefault(SettingKeys.albumSortFactorKey, SettingsDefaults.chipSortFactor, SortFactor.values);
+
+  set albumSortFactor(SortFactor newValue) => set(SettingKeys.albumSortFactorKey, newValue.name);
+
+  SortFactor get countrySortFactor => getEnumOrDefault(SettingKeys.countrySortFactorKey, SettingsDefaults.chipSortFactor, SortFactor.values);
+
+  set countrySortFactor(SortFactor newValue) => set(SettingKeys.countrySortFactorKey, newValue.name);
+
+  SortFactor get stateSortFactor => getEnumOrDefault(SettingKeys.stateSortFactorKey, SettingsDefaults.chipSortFactor, SortFactor.values);
+
+  set stateSortFactor(SortFactor newValue) => set(SettingKeys.stateSortFactorKey, newValue.name);
+
+  SortFactor get placeSortFactor => getEnumOrDefault(SettingKeys.placeSortFactorKey, SettingsDefaults.chipSortFactor, SortFactor.values);
+
+  set placeSortFactor(SortFactor newValue) => set(SettingKeys.placeSortFactorKey, newValue.name);
+
+  SortFactor get tagSortFactor => getEnumOrDefault(SettingKeys.tagSortFactorKey, SettingsDefaults.chipSortFactor, SortFactor.values);
+
+  set tagSortFactor(SortFactor newValue) => set(SettingKeys.tagSortFactorKey, newValue.name);
+
+  bool get albumSortReverse => getBool(SettingKeys.albumSortReverseKey) ?? false;
+
+  set albumSortReverse(bool newValue) => set(SettingKeys.albumSortReverseKey, newValue);
+
+  bool get countrySortReverse => getBool(SettingKeys.countrySortReverseKey) ?? false;
+
+  set countrySortReverse(bool newValue) => set(SettingKeys.countrySortReverseKey, newValue);
+
+  bool get stateSortReverse => getBool(SettingKeys.stateSortReverseKey) ?? false;
+
+  set stateSortReverse(bool newValue) => set(SettingKeys.stateSortReverseKey, newValue);
+
+  bool get placeSortReverse => getBool(SettingKeys.placeSortReverseKey) ?? false;
+
+  set placeSortReverse(bool newValue) => set(SettingKeys.placeSortReverseKey, newValue);
+
+  bool get tagSortReverse => getBool(SettingKeys.tagSortReverseKey) ?? false;
+
+  set tagSortReverse(bool newValue) => set(SettingKeys.tagSortReverseKey, newValue);
+
+  Set<CollectionFilter> get pinnedFilters => (getStringList(SettingKeys.pinnedFiltersKey) ?? []).map(CollectionFilter.fromJson).nonNulls.toSet();
+
+  set pinnedFilters(Set<CollectionFilter> newValue) => set(SettingKeys.pinnedFiltersKey, newValue.map((filter) => filter.toJsonString()).toList());
+
+  bool getShowTitleQuery(String routeName) => getBool(SettingKeys.showTitleQueryPrefixKey + routeName) ?? false;
+
+  void setShowTitleQuery(String routeName, bool newValue) => set(SettingKeys.showTitleQueryPrefixKey + routeName, newValue);
+
+  void resetShowTitleQuery() {
+    final configuredKeys = store.getKeys().where((v) => v.startsWith(SettingKeys.showTitleQueryPrefixKey)).toSet();
+    configuredKeys.forEach((key) => set(key, false));
+  }
+
+  Map<Uri, Set<Uri>> get albumGroups => FilterGrouping.fromJson(getString(SettingKeys.albumGroupsKey)) ?? {};
+
+  set albumGroups(Map<Uri, Set<Uri>> groups) => set(SettingKeys.albumGroupsKey, FilterGrouping.toJson(groups));
+
+  Map<Uri, Set<Uri>> get tagGroups => FilterGrouping.fromJson(getString(SettingKeys.tagGroupsKey)) ?? {};
+
+  set tagGroups(Map<Uri, Set<Uri>> groups) => set(SettingKeys.tagGroupsKey, FilterGrouping.toJson(groups));
+
+  // listening
+
+  final _lockForPins = Lock();
+
+  Future<void> updatePinnedDynamicAlbums(Map<DynamicAlbumFilter, DynamicAlbumFilter?> changes) async {
+    await _lockForPins.synchronized(() async {
+      final _pinnedFilters = pinnedFilters;
+      bool changed = false;
+      changes.forEach((oldFilter, newFilter) {
+        if (newFilter != null) {
+          changed |= _pinnedFilters.replace(oldFilter, newFilter);
+        } else {
+          changed |= _pinnedFilters.remove(oldFilter);
+        }
+      });
+      if (changed) {
+        pinnedFilters = _pinnedFilters;
+      }
+    });
+  }
+
+  Future<void> updatePinnedGroup(Uri oldGroupUri, Uri newGroupUri) async {
+    await _lockForPins.synchronized(() async {
+      final _pinnedFilters = pinnedFilters;
+      bool changed = false;
+      final grouping = FilterGrouping.forUri(oldGroupUri);
+      if (grouping != null) {
+        final oldFilter = grouping.uriToFilter(oldGroupUri);
+        final newFilter = grouping.uriToFilter(newGroupUri);
+        if (oldFilter != null && newFilter != null) {
+          changed |= _pinnedFilters.replace(oldFilter, newFilter);
+        }
+      }
+      if (changed) {
+        pinnedFilters = _pinnedFilters;
+      }
+    });
+  }
+
+  void saveAlbumGroups() => albumGroups = albumGrouping.allGroups;
+
+  void saveTagGroups() => tagGroups = tagGrouping.allGroups;
+}

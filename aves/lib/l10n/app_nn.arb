@@ -1,0 +1,868 @@
+{
+    "timeSeconds": "{count, plural, other{{count} sekund}}",
+    "@timeSeconds": {
+        "placeholders": {
+            "seconds": {}
+        }
+    },
+    "welcomeOptional": "Valfritt",
+    "welcomeTermsToggle": "Eg samtykkjer til krava og føresetnadane",
+    "itemCount": "{count, plural, =1{{count} er vald} other{{count} er valde}}",
+    "@itemCount": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "timeMinutes": "{count, plural, other{{count} minutt}}",
+    "@timeMinutes": {
+        "placeholders": {
+            "minutes": {}
+        }
+    },
+    "timeDays": "{count, plural, =1{{count} dag} other{{count} dagar}}",
+    "@timeDays": {
+        "placeholders": {
+            "days": {}
+        }
+    },
+    "focalLength": "{length} mm",
+    "@focalLength": {
+        "placeholders": {
+            "length": {
+                "type": "String",
+                "example": "5.4"
+            }
+        }
+    },
+    "applyButtonLabel": "NYTTA",
+    "deleteButtonLabel": "SLETT",
+    "nextButtonLabel": "NESTE",
+    "showButtonLabel": "VIS",
+    "hideButtonLabel": "SKJUL",
+    "continueButtonLabel": "HALD FRAM",
+    "changeTooltip": "Brigd",
+    "clearTooltip": "Tøm",
+    "previousTooltip": "Førre",
+    "nextTooltip": "Neste",
+    "showTooltip": "Vis",
+    "hideTooltip": "Skjul",
+    "actionRemove": "Tak bort",
+    "resetTooltip": "Still attende",
+    "saveTooltip": "Spar",
+    "pickTooltip": "Vel",
+    "chipActionUnpin": "losna ifrå toppen",
+    "chipActionRename": "Byt namn",
+    "chipActionSetCover": "Sett omslag",
+    "chipActionCreateAlbum": "Lag eit album",
+    "entryActionCopyToClipboard": "Kopier til utklippstavla",
+    "entryActionDelete": "Slett",
+    "entryActionConvert": "Lag om",
+    "entryActionRename": "Byt namn",
+    "entryActionRestore": "Gjenopprett",
+    "entryActionRotateCCW": "Snu imot klokka",
+    "entryActionRotateCW": "Snu med klokka",
+    "entryActionFlip": "Vend vassrett",
+    "entryActionPrint": "Skriv ut",
+    "entryActionViewSource": "Vis kjelda",
+    "entryActionShowGeoTiffOnMap": "Vis som overlagskart",
+    "entryActionConvertMotionPhotoToStillImage": "Lag om til eit stillbilete",
+    "entryActionViewMotionPhotoVideo": "Opne video",
+    "entryActionEdit": "Brigd",
+    "entryActionOpen": "Opne med",
+    "entryActionSetAs": "Sett som",
+    "entryActionOpenMap": "Vis i kartapp",
+    "entryActionRotateScreen": "Snu skjermen",
+    "entryActionAddFavourite": "Lik",
+    "videoActionCaptureFrame": "Grip biletet",
+    "videoActionMute": "Døyv",
+    "videoActionUnmute": "Ikkje døyv",
+    "videoActionPause": "Stans",
+    "videoActionPlay": "Spel av",
+    "appName": "Aves",
+    "welcomeMessage": "Velkomen til Aves",
+    "chipActionPin": "Fest til toppen",
+    "cancelTooltip": "Avbryt",
+    "doubleBackExitMessage": "Trykk «attende» igjen for å gå ut.",
+    "sourceStateLocatingPlaces": "Finn stadar",
+    "doNotAskAgain": "Ikkje spør att",
+    "chipActionDelete": "Slett",
+    "chipActionGoToAlbumPage": "Vis i Album",
+    "chipActionGoToCountryPage": "Vis i Land",
+    "chipActionGoToTagPage": "Vis i Merke",
+    "chipActionHide": "Skjul",
+    "sourceStateLocatingCountries": "Finn land",
+    "chipActionFilterOut": "Tak ut",
+    "chipActionFilterIn": "Tak med",
+    "entryActionExport": "Før ut",
+    "entryActionInfo": "Opplysingar",
+    "entryActionShare": "Del",
+    "entryActionRemoveFavourite": "Stogg å like",
+    "videoActionReplay10": "Spol 10 sekund bakover",
+    "videoActionSkip10": "Spol 10 sekund framover",
+    "videoActionSelectStreams": "Vel spor",
+    "videoActionSetSpeed": "Avspelingssnøggleik",
+    "viewerActionSettings": "Innstillingar",
+    "slideshowActionResume": "Hald fram",
+    "slideshowActionShowInCollection": "Vis i Samling",
+    "entryInfoActionEditDate": "Brigd datoen og tida",
+    "entryInfoActionEditTitleDescription": "Brigd namnet og utgreiinga",
+    "entryInfoActionEditRating": "Brigd omdøminga",
+    "entryInfoActionEditTags": "Brigd merka",
+    "entryInfoActionExportMetadata": "Før ut metadata",
+    "filterAspectRatioLandscapeLabel": "Liggjande",
+    "filterAspectRatioPortraitLabel": "Ståande",
+    "filterFavouriteLabel": "Likar",
+    "filterNoDateLabel": "Ikkje dagsette",
+    "filterNoAddressLabel": "Inga adresse",
+    "filterNoRatingLabel": "Ikkje dømde",
+    "filterNoTagLabel": "Utan merke",
+    "filterNoTitleLabel": "Utan namn",
+    "filterRecentlyAddedLabel": "Nyleg lagde til",
+    "filterRatingRejectedLabel": "Avslegen",
+    "filterTypeRawLabel": "Rå",
+    "filterTypeSphericalVideoLabel": "360°-video",
+    "filterTypeGeotiffLabel": "GeoTIFF",
+    "filterMimeImageLabel": "Bilete",
+    "filterMimeVideoLabel": "Video",
+    "coordinateFormatDms": "G-M-S",
+    "coordinateFormatDecimal": "Desimalgrader",
+    "coordinateDmsNorth": "N",
+    "coordinateDmsSouth": "S",
+    "coordinateDmsEast": "A",
+    "coordinateDmsWest": "V",
+    "unitSystemImperial": "Engelske måleiningar",
+    "videoLoopModeShortOnly": "Berre stutte videoar",
+    "videoLoopModeNever": "Av",
+    "videoLoopModeAlways": "På",
+    "videoControlsPlayOutside": "Opne med ein ytre avspelar",
+    "mapStyleGoogleNormal": "Google Maps",
+    "mapStyleGoogleHybrid": "Google Maps (hybrid)",
+    "mapStyleGoogleTerrain": "Google Maps (mark)",
+    "nameConflictStrategyRename": "Byt namn",
+    "nameConflictStrategyReplace": "Byt ut",
+    "nameConflictStrategySkip": "Hopp over",
+    "keepScreenOnNever": "Aldri",
+    "keepScreenOnViewerOnly": "Berre på visingssida",
+    "keepScreenOnAlways": "Heile tida",
+    "accessibilityAnimationsRemove": "Hindr skjermrørsler",
+    "subtitlePositionTop": "På toppen",
+    "subtitlePositionBottom": "I botnen",
+    "videoPlaybackSkip": "Hopp over",
+    "videoPlaybackMuted": "Spel av utan ljod",
+    "videoPlaybackWithSound": "Spel av med ljod",
+    "viewerTransitionZoomIn": "Auk",
+    "wallpaperTargetLock": "Låseskjerm",
+    "widgetDisplayedItemMostRecent": "Nylegaste",
+    "widgetOpenPageCollection": "Opne samlinga",
+    "widgetOpenPageViewer": "Opne visinga",
+    "albumTierPinned": "Festa",
+    "albumTierSpecial": "Ofte opna",
+    "albumTierApps": "Appar",
+    "albumTierRegular": "Andre",
+    "storageVolumeDescriptionFallbackPrimary": "Indre gøyme",
+    "rootDirectoryDescription": "rotmappe",
+    "storageAccessDialogMessage": "Vel {directory} i «{volume}» i neste vising for å gje denne appen tilgjenge til ho.",
+    "@storageAccessDialogMessage": {
+        "placeholders": {
+            "directory": {
+                "type": "String",
+                "description": "the name of a directory, using the output of `rootDirectoryDescription` or `otherDirectoryDescription`"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "entryInfoActionEditLocation": "Brigd stadsetjinga",
+    "entryInfoActionRemoveMetadata": "Tak bort metadata",
+    "filterOnThisDayLabel": "På denne dagen",
+    "coordinateDms": "{coordinate} {direction}",
+    "@coordinateDms": {
+        "placeholders": {
+            "coordinate": {
+                "type": "String",
+                "example": "38° 41′ 47.72″"
+            },
+            "direction": {
+                "type": "String",
+                "example": "S"
+            }
+        }
+    },
+    "unitSystemMetric": "Metrisk",
+    "mapStyleStamenWatercolor": "Stamen Watercolor (vassfarge)",
+    "viewerTransitionNone": "Ingen",
+    "storageVolumeDescriptionFallbackNonPrimary": "Ytre gøyme",
+    "albumTierNew": "Ny",
+    "otherDirectoryDescription": "«{name}»-mappa",
+    "@otherDirectoryDescription": {
+        "placeholders": {
+            "name": {
+                "type": "String",
+                "example": "Pictures",
+                "description": "the name of a specific directory"
+            }
+        }
+    },
+    "keepScreenOnVideoPlayback": "Under videoavspeling",
+    "newAlbumDialogNameLabel": "Albumsnamn",
+    "durationDialogMinutes": "Minutt",
+    "settingsThemeColorHighlights": "Léta framhevjingar",
+    "viewerInfoBackToViewerTooltip": "Attende til vising",
+    "mapStyleDialogTitle": "Kartstil",
+    "notEnoughSpaceDialogMessage": "Denne gjerda tarv {neededSize} unytta rom på «{volume}» for å verta fullgjord, men det er berre {freeSize} att.",
+    "@notEnoughSpaceDialogMessage": {
+        "placeholders": {
+            "neededSize": {
+                "type": "String",
+                "example": "314 MB"
+            },
+            "freeSize": {
+                "type": "String",
+                "example": "123 MB"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "missingSystemFilePickerDialogMessage": "Systemfilveljaren er borte eller avslegen. Slå han på og røyn om att.",
+    "videoResumeDialogMessage": "Hald fram avspeling ifrå {time}?",
+    "@videoResumeDialogMessage": {
+        "placeholders": {
+            "time": {
+                "type": "String",
+                "example": "13:37"
+            }
+        }
+    },
+    "videoStartOverButtonLabel": "BYRJA OM ATT",
+    "hideFilterConfirmationDialogMessage": "Samsvarande bilete og videoar vil verte skjult ifrå samlinga di. Du kan visa dei att ifrå «Personvern»-innstillingane.\n\nEr du sikker på at du vil skjule dei?",
+    "renameEntrySetPageInsertTooltip": "Innskrivingsområde",
+    "renameEntrySetPagePatternFieldLabel": "Namngjevingsmønster",
+    "renameEntrySetPagePreviewSectionTitle": "Førehandsvis",
+    "renameEntryDialogLabel": "Nytt namn",
+    "editEntryDialogCopyFromItem": "Kopier ifrå annan ting",
+    "editEntryDateDialogSourceFileModifiedDate": "Filbrigdedato",
+    "durationDialogHours": "Timar",
+    "editEntryLocationDialogChooseOnMap": "Vel på kartet",
+    "settingsLanguageTile": "Skriftmål",
+    "settingsUnitSystemTile": "Einingar",
+    "settingsCoordinateFormatDialogTitle": "Koordinatformat",
+    "settingsWidgetDisplayedItem": "Vist ting",
+    "statsTopAlbumsSectionTitle": "Topp-album",
+    "statsTopTagsSectionTitle": "Toppmerke",
+    "viewerInfoUnknown": "ukjend",
+    "viewerInfoLabelResolution": "Oppløysing",
+    "viewerInfoLabelUri": "URI",
+    "viewerInfoLabelOwner": "Eigar",
+    "viewerInfoLabelCoordinates": "Koordinatar",
+    "tagEditorPageAddTagTooltip": "Legg til merke",
+    "panoramaEnableSensorControl": "Slå på sensorstyring",
+    "panoramaDisableSensorControl": "Slå av sensorstyring",
+    "nameConflictDialogSingleSourceMessage": "Somme filer i målmappa har same namn.",
+    "nameConflictDialogMultipleSourceMessage": "Somme filer har same namn.",
+    "binEntriesConfirmationDialogMessage": "{count, plural, =1{Flytt denne tingen til papirkorga?} other{Flytt desse {count} tinga til papirkorga?}}",
+    "@binEntriesConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "deleteEntriesConfirmationDialogMessage": "{count, plural, =1{Slett denne tingen?} other{Slett desse {count} tinga?}}",
+    "@deleteEntriesConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "videoResumeButtonLabel": "HALD FRAM",
+    "entryActionShareVideoOnly": "Del berre video",
+    "entryActionShareImageOnly": "Del berre bilete",
+    "unsupportedTypeDialogMessage": "{count, plural, other{Denne gjerda er ustødd for ting av fylgjande slag: {types}.}}",
+    "@unsupportedTypeDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            },
+            "types": {
+                "type": "String",
+                "example": "GIF, TIFF, MP4",
+                "description": "a list of unsupported types"
+            }
+        }
+    },
+    "addShortcutDialogLabel": "Snarvegsmerke",
+    "addShortcutButtonLabel": "LEGG TIL",
+    "noMatchingAppDialogMessage": "Ingen appar kan handsame dette.",
+    "setCoverDialogLatest": "Nyaste ting",
+    "setCoverDialogAuto": "Auto",
+    "newAlbumDialogTitle": "Nytt Album",
+    "newAlbumDialogNameLabelAlreadyExistsHelper": "Mappa finst alt",
+    "newAlbumDialogStorageLabel": "Gøyme:",
+    "renameAlbumDialogLabel": "Nytt namn",
+    "renameAlbumDialogLabelAlreadyExistsHelper": "Mappa finst alt",
+    "renameEntrySetPageTitle": "Byt namn",
+    "exportEntryDialogWidth": "Breidd",
+    "deleteMultiAlbumConfirmationDialogMessage": "{count, plural, =1{Slett desse albuma og deira ting?} other{Slett desse albuma og deira {count} ting?}}",
+    "@deleteMultiAlbumConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "exportEntryDialogHeight": "Høgd",
+    "editEntryDateDialogExtractFromTitle": "Tak ut ifrå namn",
+    "editEntryDateDialogCopyField": "Kopier ifrå annan dato",
+    "editEntryDateDialogShift": "Skyv",
+    "durationDialogSeconds": "Sekund",
+    "editEntryRatingDialogTitle": "Omdøme",
+    "removeEntryMetadataDialogTitle": "Metadataborttaking",
+    "removeEntryMetadataDialogMore": "Meir",
+    "statsTopPlacesSectionTitle": "Toppstadar",
+    "settingsCollectionTile": "Samling",
+    "statsPageTitle": "Samandrag",
+    "statsTopCountriesSectionTitle": "Toppland",
+    "viewerOpenPanoramaButtonLabel": "OPNE PANORAMA",
+    "viewerInfoLabelSize": "Storleik",
+    "viewerInfoLabelDate": "Dato",
+    "viewerInfoLabelDuration": "Lengd",
+    "viewerInfoLabelPath": "Sti",
+    "mapZoomOutTooltip": "Mink",
+    "mapZoomInTooltip": "Auk",
+    "openMapPageTooltip": "Vis på kartsida",
+    "viewerInfoViewXmlLinkText": "Vis XML",
+    "viewerInfoSearchFieldLabel": "Søk metadata",
+    "viewerInfoSearchEmpty": "Ingen samsvarande lyklar",
+    "viewerInfoSearchSuggestionDate": "Dato og tid",
+    "tagEditorPageTitle": "Brigd merke",
+    "tagEditorPageNewTagFieldLabel": "Nytt merke",
+    "sourceViewerPageTitle": "Kjelde",
+    "renameProcessorCounter": "Teljar",
+    "renameProcessorName": "Namn",
+    "editEntryDateDialogTitle": "Dato og tid",
+    "editEntryLocationDialogLatitude": "Breiddegrad",
+    "editEntryLocationDialogLongitude": "Lengdegrad",
+    "sourceStateLoading": "Hentar inn",
+    "viewerErrorDoesNotExist": "Fila finst ikkje meir.",
+    "filterBinLabel": "Papirkorg",
+    "filterTypeAnimatedLabel": "Animert",
+    "filterTypeMotionPhotoLabel": "Rørslebilete",
+    "filterTypePanoramaLabel": "Panorama",
+    "mapStyleOsmHot": "Humanitært OSM",
+    "themeBrightnessLight": "Ljos",
+    "themeBrightnessDark": "Mørk",
+    "themeBrightnessBlack": "Svart",
+    "viewerTransitionSlide": "Skridande",
+    "viewerTransitionParallax": "Parallakse",
+    "viewerTransitionFade": "Ton ut",
+    "widgetDisplayedItemRandom": "Tilfeldig",
+    "widgetOpenPageHome": "Opne heimsida",
+    "restrictedAccessDialogMessage": "Denne appen har ikkje lov til å brigde filer i «{directory}»-mappa i «{volume}».\n\nBruk ein førehandsinnlagd filhandsamar eller galleriapp til å flytta tinga til ei anna mappe.",
+    "@restrictedAccessDialogMessage": {
+        "placeholders": {
+            "directory": {
+                "type": "String",
+                "description": "the name of a directory, using the output of `rootDirectoryDescription` or `otherDirectoryDescription`"
+            },
+            "volume": {
+                "type": "String",
+                "example": "SD card",
+                "description": "the name of a storage volume"
+            }
+        }
+    },
+    "deleteSingleAlbumConfirmationDialogMessage": "{count, plural, =1{Slett dette albumet og tingen i det?} other{Slett dette albumet og dei {count} tinga i det?}}",
+    "@deleteSingleAlbumConfirmationDialogMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "exportEntryDialogFormat": "Format:",
+    "tagPlaceholderCountry": "Land",
+    "tagEditorSectionRecent": "Nyleg",
+    "tagPlaceholderPlace": "Stad",
+    "viewerInfoSearchSuggestionRights": "Rettar",
+    "viewerInfoSearchSuggestionResolution": "Oppløysing",
+    "viewerInfoOpenLinkText": "Opne",
+    "mapStyleTooltip": "Vel kartstil",
+    "viewerInfoLabelAddress": "Adresse",
+    "viewerInfoLabelTitle": "Namn",
+    "viewerErrorUnknown": "Oida.",
+    "viewerSetWallpaperButtonLabel": "SET SOM BAKGRUNNSBILETE",
+    "settingsWidgetShowOutline": "Omrit",
+    "settingsWidgetPageTitle": "Bileteramme",
+    "settingsScreenSaverPageTitle": "Skjermsparar",
+    "settingsUnitSystemDialogTitle": "Einingar",
+    "settingsCoordinateFormatTile": "Koordinatformat",
+    "settingsLanguagePageTitle": "Skriftmål",
+    "settingsLanguageSectionTitle": "Skriftmål og format",
+    "settingsDisplaySectionTitle": "Vising",
+    "videoStreamSelectionDialogTrack": "Spor",
+    "genericDangerWarningDialogMessage": "Er du viss?",
+    "menuActionStats": "Samandrag",
+    "viewDialogGroupSectionTitle": "Hop",
+    "viewDialogLayoutSectionTitle": "Oppsett",
+    "tileLayoutMosaic": "Mosaikk",
+    "aboutCreditsWorldAtlas1": "Denne appen nyttar ei TopoJSON-fil ifrå",
+    "viewerInfoSearchSuggestionDescription": "Utgreiing",
+    "aboutCreditsWorldAtlas2": "under ISC-løyve.",
+    "videoSpeedDialogLabel": "Avspelingssnøggleik",
+    "videoStreamSelectionDialogVideo": "Video",
+    "videoStreamSelectionDialogAudio": "Ljod",
+    "videoStreamSelectionDialogText": "Undertekster",
+    "videoStreamSelectionDialogOff": "Av",
+    "videoStreamSelectionDialogNoSelection": "Det er ingen andre spor.",
+    "genericSuccessFeedback": "Ferdig",
+    "genericFailureFeedback": "Mislykka",
+    "menuActionSelectAll": "Vel alle",
+    "menuActionSelectNone": "Tak bort val",
+    "menuActionMap": "Kart",
+    "menuActionSlideshow": "Ljosbiletevising",
+    "menuActionConfigureView": "Vis",
+    "menuActionSelect": "Vel",
+    "tagEditorSectionPlaceholders": "Førebels",
+    "tileLayoutGrid": "Rutenett",
+    "tileLayoutList": "Liste",
+    "coverDialogTabCover": "Omslag",
+    "coverDialogTabApp": "App",
+    "coverDialogTabColor": "Let",
+    "appPickDialogTitle": "Vel app",
+    "aboutPageTitle": "Om",
+    "aboutLinkLicense": "Løyve",
+    "appPickDialogNone": "Ingen",
+    "aboutBugSectionTitle": "Mistakrapport",
+    "aboutTranslatorsSectionTitle": "Omsetjarar",
+    "viewerInfoOpenEmbeddedFailureFeedback": "Greidde ikkje å pakke ut innbygde data",
+    "dateThisMonth": "Denne månaden",
+    "settingsViewerSectionTitle": "Visinga",
+    "cropAspectRatioFree": "Frihand",
+    "cropAspectRatioOriginal": "Opphavleg",
+    "cropAspectRatioSquare": "Kvadrat",
+    "videoResumptionModeNever": "Aldri",
+    "wallpaperTargetHome": "Heimskjermen",
+    "settingsViewerShowMinimap": "Vis småkart",
+    "patternDialogConfirm": "Stadfest mønsteret",
+    "exportEntryDialogWriteMetadata": "Tak med metadata",
+    "removeEntryMetadataMotionPhotoXmpWarningDialogMessage": "XMP er turvt for å kunne spela av videoen inni rørslebilete.\n\nEr du viss på at du vil ta det bort?",
+    "aboutBugSaveLogInstruction": "Spar apploggar til ei fil",
+    "collectionActionMove": "Flytt til album",
+    "collectionGroupAlbum": "Etter album",
+    "collectionGroupMonth": "Etter månad",
+    "sectionUnknown": "Ukjend",
+    "collectionEditFailureFeedback": "{count, plural, other{Kunne ikkje brigde {count} ting}}",
+    "@collectionEditFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionMoveSuccessFeedback": "{count, plural, other{Flytte {count} ting}}",
+    "@collectionMoveSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionEmptyFavourites": "Det du likar vert vist her",
+    "collectionEmptyVideos": "Ingen videoar",
+    "drawerCollectionMotionPhotos": "Rørslebilete",
+    "drawerTagPage": "Merke",
+    "sortByDate": "Etter dato",
+    "sortBySize": "Etter storleik",
+    "sortByRating": "Etter omdøme",
+    "sortOrderNewestFirst": "Nyaste først",
+    "sortOrderOldestFirst": "Eldste først",
+    "sortOrderLargestFirst": "Største først",
+    "albumScreenRecordings": "Skjermopptak",
+    "albumVideoCaptures": "Videoopptak",
+    "albumEmpty": "Ingen album",
+    "searchAlbumsSectionTitle": "Album",
+    "searchCountriesSectionTitle": "Land",
+    "settingsConfirmationVaultDataLoss": "Åtvar om datatap ved kvelvet",
+    "settingsNavigationDrawerAddAlbum": "Legg til album",
+    "settingsConfirmationAfterMoveToBinItems": "Verta spurd om du vil angre etter å ha kasta ting i søppelkorga",
+    "settingsThumbnailShowTagIcon": "Vis merke-ikon",
+    "settingsCollectionBurstPatternsNone": "Ingen",
+    "settingsViewerQuickActionEmpty": "Ingen knappar",
+    "settingsViewerShowOverlayOnOpening": "Vis ved opning",
+    "settingsViewerShowShootingDetails": "Vis biletetakingsopplysingar",
+    "settingsSlideshowFillScreen": "Fyll skjermen",
+    "settingsViewerEnableOverlayBlurEffect": "Uskarp verknad",
+    "settingsSlideshowVideoPlaybackTile": "Videoavspeling",
+    "settingsSlideshowVideoPlaybackDialogTitle": "Videoavspeling",
+    "settingsVideoShowVideos": "Vis videoar",
+    "settingsVideoEnableHardwareAcceleration": "Auk ytinga med maskinvara",
+    "settingsVideoBackgroundMode": "Spel av i bakgrunnen",
+    "settingsVideoBackgroundModeDialogTitle": "Spel av i bakgrunnen",
+    "settingsSlideshowIntervalTile": "Byt til neste etter",
+    "settingsSubtitleThemeTextAlignmentTile": "Tekststilling",
+    "settingsSubtitleThemeShowOutline": "Vis omriss og skuggar",
+    "settingsSubtitleThemeTextAlignmentDialogTitle": "Tekststilling",
+    "settingsAccessibilityShowPinchGestureAlternatives": "Vis andre utvegar for fleirtrykkhandvendingar",
+    "settingsThemeEnableDynamicColor": "Skiftande let",
+    "settingsHiddenItemsTile": "Skjulte ting",
+    "settingsStorageAccessBanner": "Nokre mapper krev at du gjev appen tilgjenge til dei for å brigde filer i dei. Du kan sjå på mappene som du har gjeve appen tilgjenge til her.",
+    "settingsDisplayRefreshRateModeDialogTitle": "Rørslejamleik",
+    "viewerInfoPageTitle": "Opplysingar",
+    "mapPointNorthUpTooltip": "Rett opp",
+    "setCoverDialogCustom": "Eiget",
+    "pinDialogEnter": "Skriv inn ein talkode",
+    "settingsNavigationDrawerBanner": "Trykk og hald for å flytta og brigde rekkjefylgda til menytinga.",
+    "settingsEnableBinSubtitle": "Sparar på sletta ting i 30 dagar",
+    "statsTopStatesSectionTitle": "Topplandsdelar",
+    "chipActionCreateVault": "Kvelv",
+    "chipActionConfigureVault": "Set opp kvelvet",
+    "displayRefreshRatePreferLowest": "Mest ujamn",
+    "filterTaggedLabel": "Merkte",
+    "displayRefreshRatePreferHighest": "Mest jamn",
+    "settingsThumbnailShowLocationIcon": "Vis stad-ikon",
+    "settingsThumbnailShowFavouriteIcon": "Vis likt-ikon",
+    "settingsImageBackground": "Biletbakgrunn",
+    "settingsViewerQuickActionsTile": "Kvikkgjerder",
+    "settingsViewerShowRatingTags": "Vis omdøme og merke",
+    "settingsViewerQuickActionEditorAvailableButtonsSectionTitle": "Tilgjengelege knappar",
+    "saveCopyButtonLabel": "SPAR KOPI",
+    "applyTooltip": "Nytt",
+    "editorActionTransform": "Form om",
+    "editorTransformCrop": "Klipp til",
+    "editorTransformRotate": "Snu",
+    "maxBrightnessNever": "Aldri",
+    "wallpaperTargetHomeLock": "Heim- og låseskjermane",
+    "sortOrderAtoZ": "A-Å",
+    "createAlbumButtonLabel": "LAG",
+    "countryPageTitle": "Land",
+    "countryEmpty": "Ingen land",
+    "tagEmpty": "Ingen merke",
+    "newVaultWarningDialogMessage": "Ting i kvelva er berre tilgjengelege for denne appen.\n\nOm du slettar denne appen eller tømmer dataa til denne appen, vil du missa alt som er i kvelva.",
+    "newVaultDialogTitle": "Nytt kvelv",
+    "configureVaultDialogTitle": "Set opp kvelvet",
+    "vaultDialogLockModeWhenScreenOff": "Lås når skjermen slår seg av",
+    "sortOrderLowestFirst": "Lægste først",
+    "maxBrightnessAlways": "Heile tida",
+    "videoResumptionModeAlways": "Kvar gong",
+    "vaultDialogLockTypeLabel": "Låseslag",
+    "pinDialogConfirm": "Stadfest talkoden",
+    "passwordDialogEnter": "Skriv inn passordet",
+    "vaultBinUsageDialogMessage": "Nokre kvelv nyttar papirkorga.",
+    "mapEmptyRegion": "Ingen bilete i dette området",
+    "exportEntryDialogQuality": "Kvalitet",
+    "tooManyItemsErrorDialogMessage": "Røyn att med færre ting.",
+    "aboutLicensesShowAllButtonLabel": "Vis alle løyve",
+    "collectionActionEdit": "Brigd",
+    "collectionSearchTitlesHintText": "Søk etter namn",
+    "collectionGroupDay": "Etter dag",
+    "collectionMoveFailureFeedback": "{count, plural, other{Kunne ikkje flytta {count} ting}}",
+    "@collectionMoveFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionRenameFailureFeedback": "{count, plural, other{Kunne ikkje byta namn på {count} ting}}",
+    "@collectionRenameFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "settingsAskEverytime": "Spør kvar gong",
+    "settingsThumbnailShowRating": "Vis omdøme",
+    "settingsThumbnailShowRawIcon": "Vis rå-ikon",
+    "settingsCollectionQuickActionEditorPageTitle": "Kvikkgjerder",
+    "settingsCollectionSelectionQuickActionEditorBanner": "Trykk og hald for å flytta knappane og velja kva for slags gjerder som skal visast når du vel ting.",
+    "settingsCollectionQuickActionTabBrowsing": "Gjennomsyn",
+    "settingsThumbnailShowMotionPhotoIcon": "Vis rørslebilete-ikon",
+    "settingsViewerQuickActionEditorBanner": "Trykk og hald for å flytta knappane og velja kva for slags gjerder som skal visast i visinga.",
+    "settingsViewerSlideshowTile": "Ljosbiletevising",
+    "settingsViewerMaximumBrightness": "Full ljosstyrke",
+    "settingsViewerUseCutout": "Nytt utklipt område",
+    "settingsVideoPlaybackTile": "Avspeling",
+    "settingsVideoPlaybackPageTitle": "Avspeling",
+    "settingsVideoLoopModeDialogTitle": "Gjentak",
+    "settingsVideoResumptionModeTile": "Spel av der du slapp",
+    "settingsVideoResumptionModeDialogTitle": "Spel av der du slapp",
+    "settingsVideoControlsPageTitle": "Styring",
+    "settingsVideoGestureDoubleTapTogglePlay": "Dobbeltrykk for å spela/stansa",
+    "settingsVideoGestureVerticalDragBrightnessVolume": "Dra opp eller ned for å brigde ljos-/ljodstyrken",
+    "settingsVideoButtonsTile": "Knappar",
+    "settingsSubtitleThemeTextPositionDialogTitle": "Tekststad",
+    "settingsSubtitleThemeTextSize": "Tekststorleik",
+    "settingsAccessibilitySectionTitle": "Tilgjenge",
+    "settingsStorageAccessRevokeTooltip": "Fråta",
+    "settingsStorageAccessEmpty": "Ingen gjevne tilgjenge",
+    "settingsDisplayRefreshRateModeTile": "Rørslejamleiken til skjermen",
+    "tagEditorDiscardDialogMessage": "Vil du avvisa brigda?",
+    "sortByName": "Etter namn",
+    "sortByItemCount": "Etter mengd ting",
+    "albumGroupVolume": "Etter gøymestad",
+    "searchTagsSectionTitle": "Merke",
+    "settingsSearchFieldLabel": "Søkjeinnstillingar",
+    "settingsKeepScreenOnDialogTitle": "Hald skjermen slegen på",
+    "settingsDoubleBackExit": "Trykk «Attende» to gongar for å gå ut av appen",
+    "settingsNavigationDrawerTabPages": "Sider",
+    "settingsCollectionQuickActionsTile": "Kvikkgjerder",
+    "settingsThumbnailShowVideoDuration": "Vis videolengd",
+    "settingsViewerGestureSideTapNext": "Trykk på skjermkantane for å visa førre/neste ting",
+    "settingsViewerQuickActionEditorPageTitle": "Kvikkgjerder",
+    "settingsViewerQuickActionEditorDisplayedButtonsSectionTitle": "Viste knappar",
+    "settingsViewerOverlayTile": "Overlag",
+    "settingsSlideshowTransitionTile": "Overgang",
+    "settingsStorageAccessPageTitle": "Gøymetilgjenge",
+    "settingsDisplayUseTvInterface": "Android TV-grensesnitt",
+    "settingsActionExport": "Før ut",
+    "settingsNavigationDrawerTabAlbums": "Album",
+    "settingsThumbnailOverlayPageTitle": "Overlag",
+    "editEntryDateDialogSetCustom": "Vel dato å setja",
+    "aboutBugReportButton": "Rapporter",
+    "aboutLicensesSectionTitle": "Løyve til opne kjeldekodar",
+    "aboutLicensesFlutterPluginsSectionTitle": "Flutter-tillegg",
+    "collectionActionEmptyBin": "Tøm papirkorga",
+    "collectionActionCopy": "Kopier til album",
+    "collectionCopySuccessFeedback": "{count, plural, other{Kopierte {count} ting}}",
+    "@collectionCopySuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "drawerAboutButton": "Om",
+    "collectionEmptyImages": "Ingen bilete",
+    "collectionEmptyGrantAccessButtonLabel": "Gje tilgjenge",
+    "drawerCollectionVideos": "Videoar",
+    "drawerCountryPage": "Land",
+    "sortOrderZtoA": "Å-A",
+    "sortOrderHighestFirst": "Høgste først",
+    "albumMimeTypeMixed": "Blanda",
+    "albumPickPageTitlePick": "Vel album",
+    "albumScreenshots": "Skjermbilete",
+    "settingsHomeTile": "Heim",
+    "settingsViewerOverlayPageTitle": "Overlag",
+    "settingsViewerSlideshowPageTitle": "Ljosbiletevising",
+    "settingsSlideshowRepeat": "Gjentak",
+    "settingsVideoPageTitle": "Videoinnstillingar",
+    "settingsVideoSectionTitle": "Video",
+    "settingsSubtitleThemeTile": "Undertekster",
+    "settingsSubtitleThemePageTitle": "Undertekster",
+    "settingsSubtitleThemeSample": "Dette er eit døme.",
+    "settingsSubtitleThemeTextPositionTile": "Tekststad",
+    "settingsSubtitleThemeTextAlignmentLeft": "Venstre",
+    "settingsSubtitleThemeBackgroundOpacity": "Bakgrunnsgjennomsyn",
+    "settingsAllowInstalledAppAccess": "Gje tilgjenge til lista over innlagde appar",
+    "settingsAllowInstalledAppAccessSubtitle": "Vert nytta til å betre albumsvisinga",
+    "settingsSaveSearchHistory": "Spar søkjehistorikken",
+    "settingsAllowErrorReporting": "Send inn anonyme feilrapportar",
+    "collectionSelectSectionTooltip": "Vel utvalet",
+    "settingsCollectionBrowsingQuickActionEditorBanner": "Trykk og hald for å flytta knappane og velja kva for slags gjerder som skal visast når du ser igjennom ting.",
+    "settingsMotionPhotoAutoPlay": "Spel av rørslebilete sjølvverkande",
+    "settingsViewerShowDescription": "Vis utgreiingar",
+    "settingsViewerShowInformationSubtitle": "Vis namn, dato, stad, osv …",
+    "settingsThemeBrightnessDialogTitle": "Ham",
+    "settingsThemeBrightnessTile": "Ham",
+    "viewerInfoLabelDescription": "Utgreiing",
+    "passwordDialogConfirm": "Stadfest passordet",
+    "drawerCollectionImages": "Bilete",
+    "settingsConfirmationDialogTitle": "Stadfestingsvindaugo",
+    "settingsConfirmationBeforeDeleteItems": "Verta spurd før du slettar noko for godt",
+    "settingsStorageAccessTile": "Gøymetilgjenge",
+    "tagPlaceholderState": "Landsdel",
+    "chipActionShowCountryStates": "Vis landsdelar",
+    "viewerActionLock": "Lås visinga",
+    "viewerActionUnlock": "Lås opp visinga",
+    "albumTierVaults": "Kvelv",
+    "lengthUnitPercent": "%",
+    "collectionPickPageTitle": "Vel",
+    "collectionSelectPageTitle": "Vel ting",
+    "collectionActionAddShortcut": "Legg til snarveg",
+    "collectionDeleteFailureFeedback": "{count, plural, other{Kunne ikkje slette {count} ting}}",
+    "@collectionDeleteFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionCopyFailureFeedback": "{count, plural, other{Kunne ikkje kopiera {count} ting}}",
+    "@collectionCopyFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "collectionEditSuccessFeedback": "{count, plural, other{Brigda {count} ting}}",
+    "@collectionEditSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "drawerSettingsButton": "Innstillingar",
+    "collectionDeselectSectionTooltip": "Fråvel utvalet",
+    "drawerCollectionAll": "Alle samlingar",
+    "sortOrderSmallestFirst": "Smæste først",
+    "albumPickPageTitleCopy": "Kopier til album",
+    "drawerCollectionFavourites": "Likte",
+    "albumGroupTier": "Etter nivå",
+    "albumPickPageTitleMove": "Flytt til album",
+    "albumGroupType": "Etter slag",
+    "albumCamera": "Kamera",
+    "albumDownload": "Hent",
+    "statePageTitle": "Landsdelar",
+    "stateEmpty": "Ingen landsdelar",
+    "placePageTitle": "Stadar",
+    "placeEmpty": "Ingen stadar",
+    "tagPageTitle": "Merke",
+    "binPageTitle": "Papirkorga",
+    "searchCollectionFieldHint": "Søk i samlinga",
+    "settingsTimeToTakeActionTile": "Tid for å gjera",
+    "searchStatesSectionTitle": "Landsdelar",
+    "searchPlacesSectionTitle": "Stadar",
+    "searchRatingSectionTitle": "Omdøme",
+    "searchMetadataSectionTitle": "Metadata",
+    "settingsPageTitle": "Innstillingar",
+    "settingsSystemDefault": "Systemforval",
+    "settingsDefault": "Forval",
+    "settingsDisabled": "Slegen av",
+    "settingsModificationWarningDialogMessage": "Andre innstillingar vil brigdast.",
+    "settingsSearchEmpty": "Ingen samsvarande innstilling",
+    "settingsActionExportDialogTitle": "Før ut",
+    "settingsActionImport": "Før inn",
+    "settingsActionImportDialogTitle": "Før inn",
+    "appExportCovers": "Omslag",
+    "appExportFavourites": "Likte ting",
+    "appExportSettings": "Innstillingar",
+    "settingsHomeDialogTitle": "Heim",
+    "settingsConfirmationTile": "Stadfestingsvindaugo",
+    "settingsVideoGestureSideDoubleTapSeek": "Dobbeltrykk på skjermkantane for å hoppe framover/bakover",
+    "settingsSubtitleThemeTextColor": "Tekstleten",
+    "settingsSubtitleThemeTextAlignmentRight": "Høgre",
+    "settingsPrivacySectionTitle": "Personvern",
+    "settingsDisablingBinWarningDialogMessage": "Ting i papirkorga vil slettast for godt.",
+    "settingsAllowMediaManagement": "La få handsame medium",
+    "settingsHiddenItemsPageTitle": "Skjulte ting",
+    "lengthUnitPixel": "px",
+    "vaultLockTypePin": "Talkode",
+    "searchRecentSectionTitle": "Nylege",
+    "searchDateSectionTitle": "Dato",
+    "settingsEnableBin": "Nytt papirkorga",
+    "chipActionLock": "Lås",
+    "sortByAlbumFileName": "Etter album og filnamn",
+    "aboutBugReportInstruction": "Rapporter på GitHub med loggføringene og systemopplysingane dine",
+    "aboutLinkPolicy": "Personvernutsegn",
+    "collectionPageTitle": "Samling",
+    "collectionRenameSuccessFeedback": "{count, plural, =1{Bytte namnet til 1 ting} other{Bytte namna til {count} ting}}",
+    "@collectionRenameSuccessFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "drawerCollectionPanoramas": "Panorama",
+    "drawerCollectionRaws": "Rå bilete",
+    "drawerCollectionSphericalVideos": "360°-videoar",
+    "drawerAlbumPage": "Album",
+    "drawerPlacePage": "Stadar",
+    "albumPickPageTitleExport": "Før ut til album",
+    "albumPageTitle": "Album",
+    "newFilterBanner": "ny",
+    "settingsKeepScreenOnTile": "Hald skjermen slegen på",
+    "settingsThumbnailSectionTitle": "Småbilete",
+    "settingsConfirmationBeforeMoveToBinItems": "Verta spurd før du kastar ting i papirkorga",
+    "settingsNavigationDrawerTabTypes": "Slag",
+    "settingsThumbnailOverlayTile": "Overlag",
+    "settingsSubtitleThemeTextOpacity": "Tekstgjennomsyn",
+    "settingsSubtitleThemeBackgroundColor": "Bakgrunnsleten",
+    "settingsSubtitleThemeTextAlignmentCenter": "Midten",
+    "settingsVideoControlsTile": "Styring",
+    "settingsViewerShowInformation": "Vis opplysingar",
+    "settingsViewerShowOverlayThumbnails": "Vis småbilete",
+    "settingsSlideshowShuffle": "Bland",
+    "settingsVideoLoopModeTile": "Gjentak",
+    "settingsVideoAutoPlay": "Spel av med ein gong",
+    "vaultLockTypePattern": "Mønster",
+    "vaultLockTypePassword": "Passord",
+    "patternDialogEnter": "Stryk inn eit mønster",
+    "editEntryDialogTargetFieldsHeader": "Område å brigde",
+    "settingsCollectionQuickActionTabSelecting": "Veljing",
+    "policyPageTitle": "Personvernutsegn",
+    "collectionActionRescan": "Gjennomsøk att",
+    "dateToday": "I dag",
+    "dateYesterday": "I går",
+    "entryInfoActionRemoveLocation": "Ta bort stadsetjinga",
+    "filterLocatedLabel": "Stadsette",
+    "settingsCollectionBurstPatternsTile": "Attkjenning av seriebilete",
+    "chipActionGoToPlacePage": "Vis i Stadar",
+    "settingsNavigationDrawerTile": "Framfinningsmenyen",
+    "settingsNavigationDrawerEditorPageTitle": "Framfinningsmenyen",
+    "locationPickerUseThisLocationButton": "Nytt denne stadsetjinga",
+    "aboutLicensesFlutterPackagesSectionTitle": "Flutter-pakker",
+    "aboutLicensesDartPackagesSectionTitle": "Dart-pakker",
+    "statsWithGps": "{count, plural, other{{count} ting med stadsetjing}}",
+    "@statsWithGps": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "mapAttributionOsmHot": "Fliser av [HOT](https://www.hotosm.org/) • Hust av [OSM France](https://openstreetmap.fr/)",
+    "mapAttributionStamen": "Fliser av [Stamen Design](https://stamen.com), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0)",
+    "columnCount": "{count, plural, =1{{count} kolonne} other{{count} kolonnar}}",
+    "@columnCount": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "editEntryLocationDialogTitle": "Stadsetjing",
+    "collectionExportFailureFeedback": "{count, plural, =1{Greidde ikkje å føra ut 1 side} other{Greidde ikkje å føra ut {count} sider}}",
+    "@collectionExportFailureFeedback": {
+        "placeholders": {
+            "count": {
+                "type": "int",
+                "format": "decimalPattern"
+            }
+        }
+    },
+    "editEntryLocationDialogSetCustom": "Set eiga stadsetjing",
+    "filterNoLocationLabel": "Ustadsette",
+    "settingsNavigationSectionTitle": "Finn fram",
+    "chipActionShowCollection": "Vis i Samling",
+    "mapAttributionOsmData": "Kartdata © [OpenStreetMap](https://www.openstreetmap.org/copyright)-medverkarar"
+}

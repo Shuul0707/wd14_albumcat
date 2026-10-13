@@ -1,0 +1,184 @@
+import 'dart:math';
+
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/theme/colors.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/themes.dart';
+import 'package:aves/widgets/common/basic/text/fading_line.dart';
+import 'package:collection/collection.dart';
+import 'package:community_charts_flutter/community_charts_flutter.dart' as charts;
+import 'package:equatable/equatable.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+
+typedef DatumKeyFormatter = String Function(AvesDonutDatum d);
+typedef DatumValueFormatter = String Function(int d);
+typedef DatumColorizer = Color Function(BuildContext context, AvesDonutDatum d);
+typedef DatumCallback = void Function(AvesDonutDatum d);
+
+class const AvesDonut({
+  super.key,
+  required final Widget title,
+  required final Map<String, int> byTypes,
+  required final Duration animationDuration,
+  required final DatumKeyFormatter formatKey,
+  required final DatumValueFormatter formatValue,
+  required final DatumColorizer colorize,
+  final DatumCallback? onTap,
+}) extends StatefulWidget {
+  @override
+  State<AvesDonut> createState() => _AvesDonutState();
+}
+
+class _AvesDonutState extends State<AvesDonut> with AutomaticKeepAliveClientMixin {
+  Map<String, int> get byTypes => widget.byTypes;
+
+  DatumKeyFormatter get formatKey => widget.formatKey;
+
+  DatumValueFormatter get formatValue => widget.formatValue;
+
+  DatumColorizer get colorize => widget.colorize;
+
+  static const avesDonutMinWidth = 124.0;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    if (byTypes.isEmpty) return const SizedBox();
+
+    final sum = byTypes.values.sum;
+
+    final seriesData = byTypes.entries.map((kv) {
+      final type = kv.key;
+      return AvesDonutDatum(
+        key: type,
+        value: kv.value,
+      );
+    }).toList();
+    seriesData.sort((d1, d2) {
+      final c = d2.value.compareTo(d1.value);
+      return c != 0 ? c : compareAsciiUpperCase(formatKey(d1), formatKey(d2));
+    });
+
+    return AvesColorsProvider(
+      allowMonochrome: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final series = [
+            charts.Series<AvesDonutDatum, String>(
+              id: 'type',
+              colorFn: (d, i) => charts.ColorUtil.fromDartColor(colorize(context, d)),
+              domainFn: (d, i) => formatKey(d),
+              measureFn: (d, i) => d.value,
+              data: seriesData,
+              labelAccessorFn: (d, _) => '${formatKey(d)}: ${d.value}',
+            ),
+          ];
+
+          final textScaler = MediaQuery.textScalerOf(context);
+          final minWidth = textScaler.scale(avesDonutMinWidth);
+          final availableWidth = constraints.maxWidth;
+          final dim = max(minWidth, availableWidth / (availableWidth > 4 * minWidth ? 4 : (availableWidth > 2 * minWidth ? 2 : 1)));
+
+          final donut = SizedBox(
+            width: dim,
+            height: dim,
+            child: Stack(
+              alignment: .center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.all(Radius.circular(dim)),
+                  child: Container(
+                    width: dim * .7,
+                    height: dim * .7,
+                    color: Themes.secondLayerColor(context),
+                  ),
+                ),
+                charts.PieChart(
+                  series,
+                  animate: context.select<Settings, bool>((v) => v.animate),
+                  animationDuration: widget.animationDuration,
+                  defaultRenderer: charts.ArcRendererConfig<String>(
+                    arcWidth: 16,
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: .min,
+                    children: [
+                      widget.title,
+                      Text(
+                        formatValue(sum),
+                        textAlign: .center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+          final onTap = widget.onTap;
+          final legend = SizedBox(
+            width: dim,
+            child: Column(
+              mainAxisAlignment: .center,
+              crossAxisAlignment: .start,
+              children: seriesData
+                  .map(
+                    (d) => InkWell(
+                      onTap: onTap != null ? () => onTap(d) : null,
+                      borderRadius: const BorderRadius.all(Radius.circular(123)),
+                      child: Row(
+                        mainAxisSize: .min,
+                        children: [
+                          Icon(AIcons.circle, fill: 1, color: colorize(context, d)),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: FadingLine(formatKey(d)),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            formatValue(d.value),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+          final children = [
+            donut,
+            legend,
+          ];
+          return availableWidth > minWidth * 2
+              ? Row(
+                  mainAxisSize: .min,
+                  children: children,
+                )
+              : Column(
+                  mainAxisSize: .min,
+                  children: children,
+                );
+        },
+      ),
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}
+
+@immutable
+class const AvesDonutDatum({
+  required final String key,
+  required final int value,
+}) extends Equatable {
+  @override
+  List<Object?> get props => [key, value];
+}

@@ -1,0 +1,214 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:aves/l10n/l10n.dart';
+import 'package:aves/model/device.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/model/source/analysis_controller.dart';
+import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/model/source/media_store_source.dart';
+import 'package:aves/services/common/channel.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/utils/android_file_utils.dart';
+import 'package:aves/view/view.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+import 'package:leak_tracker/leak_tracker.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+class AnalysisService {
+  static const _platform = AvesMethodChannel('deckers.thibault/aves/analysis');
+
+  static Future<void> registerCallback() async {
+    try {
+      await _platform.invokeMethod('registerCallback', <String, Object?>{
+        // callback needs to be annotated with `@pragma('vm:entry-point')` to work in release mode
+        'callbackHandle': PluginUtilities.getCallbackHandle(_init)?.toRawHandle(),
+      });
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+
+  static Future<void> startService({required bool force, List<int>? entryIds}) async {
+    // from Android 13 (API 33), notifications are off by default,
+    // so the user needs to grant the permission to see the service notification
+    unawaited(Permission.notification.request());
+
+    await reportService.log('Start analysis service${entryIds != null ? ' for ${entryIds.length} items' : ''}');
+    try {
+      await _platform.invokeMethod('startAnalysis', <String, Object?>{
+        'entryIds': entryIds,
+        'force': force,
+      });
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+}
+
+const _channel = AvesMethodChannel('deckers.thibault/aves/analysis_service_background');
+
+@pragma('vm:entry-point')
+Future<void> _init() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  initPlatformServices();
+  await androidFileUtils.init();
+  await localMediaDb.init();
+  await device.init();
+  await mobileServices.init();
+  await settings.init(monitorPlatformSettings: false, shouldSanitize: false);
+  await reportService.init();
+  videoMetadataFetcher.init();
+
+  final analyzer = Analyzer();
+  _channel.setMethodCallHandler((call) {
+    switch (call.method) {
+      case 'start':
+        analyzer.start(call.arguments);
+        return Future.value(true);
+      case 'stop':
+        analyzer.stop();
+        return Future.value(true);
+      default:
+        throw PlatformException(code: 'not-implemented', message: 'failed to handle method=${call.method}');
+    }
+  });
+  try {
+    await _channel.invokeMethod('initialized');
+  } on PlatformException catch (e, stack) {
+    await reportService.recordError(e, stack);
+  }
+}
+
+enum AnalyzerState { running, stopping, stopped }
+
+class Analyzer with WidgetsBindingObserver {
+  late AppLocalizations _l10n;
+  final ValueNotifier<AnalyzerState> _serviceStateNotifier = ValueNotifier<AnalyzerState>(AnalyzerState.stopped);
+  AnalysisController? _controller;
+  Timer? _notificationUpdateTimer;
+  final _source = MediaStoreSource();
+
+  AnalyzerState get serviceState => _serviceStateNotifier.value;
+
+  bool get isRunning => serviceState == AnalyzerState.running;
+
+  SourceState get sourceState => _source.state;
+
+  static const notificationUpdateInterval = Duration(seconds: 1);
+
+  new() {
+    debugPrint('$runtimeType create');
+    if (kFlutterMemoryAllocationsEnabled) {
+      LeakTracking.dispatchObjectCreated(
+        library: 'aves',
+        className: '$Analyzer',
+        object: this,
+      );
+    }
+    _serviceStateNotifier.addListener(_onServiceStateChanged);
+    _source.stateNotifier.addListener(_onSourceStateChanged);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void dispose() {
+    debugPrint('$runtimeType dispose');
+    if (kFlutterMemoryAllocationsEnabled) {
+      LeakTracking.dispatchObjectDisposed(object: this);
+    }
+    _stopUpdateTimer();
+    _controller?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _serviceStateNotifier.removeListener(_onServiceStateChanged);
+    _source.stateNotifier.removeListener(_onSourceStateChanged);
+    _source.dispose();
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    super.didHaveMemoryPressure();
+    reportService.log('Analyzer memory pressure');
+  }
+
+  Future<void> start(Object? args) async {
+    List<int>? entryIds;
+    var force = false;
+    if (args is Map) {
+      entryIds = (args['entryIds'] as List?)?.cast<int>();
+      force = args['force'] ?? false;
+    }
+    await reportService.log('Analyzer start for ${entryIds?.length ?? 'all'} entries');
+    _controller?.dispose();
+    _controller = AnalysisController(
+      canStartService: false,
+      entryIds: entryIds,
+      force: force,
+    );
+
+    settings.systemLocalesFallback = await deviceService.getLocales();
+    _l10n = await AppLocalizations.delegate.load(settings.resolvedLocale);
+    _serviceStateNotifier.value = AnalyzerState.running;
+    await _source.init(scope: CollectionSource.fullScope, analysisController: _controller);
+
+    _notificationUpdateTimer = Timer.periodic(notificationUpdateInterval, (_) async {
+      if (!isRunning) return;
+      await _updateNotification();
+    });
+  }
+
+  Future<void> stop() async {
+    await reportService.log('Analyzer stop');
+    _serviceStateNotifier.value = AnalyzerState.stopped;
+  }
+
+  void _stopUpdateTimer() => _notificationUpdateTimer?.cancel();
+
+  Future<void> _onServiceStateChanged() async {
+    switch (serviceState) {
+      case .running:
+        break;
+      case .stopping:
+        await _stopPlatformService();
+        _serviceStateNotifier.value = AnalyzerState.stopped;
+      case .stopped:
+        _controller?.enableStopSignal();
+        _stopUpdateTimer();
+    }
+  }
+
+  void _onSourceStateChanged() {
+    if (_source.isReady) {
+      _serviceStateNotifier.value = AnalyzerState.stopping;
+    }
+  }
+
+  Future<void> _updateNotification() async {
+    if (!isRunning) return;
+
+    final title = sourceState.getName(_l10n);
+    if (title == null) return;
+
+    final progress = _source.progressNotifier.value;
+    final progressive = progress.total != 0 && sourceState != SourceState.locatingCountries;
+
+    try {
+      await _channel.invokeMethod('updateNotification', <String, Object?>{
+        'title': title,
+        'message': progressive ? '${progress.done}/${progress.total}' : null,
+      });
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+
+  Future<void> _stopPlatformService() async {
+    try {
+      await _channel.invokeMethod('stop');
+    } on PlatformException catch (e, stack) {
+      await reportService.recordError(e, stack);
+    }
+  }
+}

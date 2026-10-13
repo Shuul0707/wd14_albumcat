@@ -1,0 +1,19 @@
+name: aves_services
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.13.3 <4.0.0"
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  aves_map:
+    path: ../aves_map
+  latlong2:
+
+dev_dependencies:
+  flutter_lints:
+
+flutter:

@@ -1,0 +1,66 @@
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:pattern_lock/pattern_lock.dart';
+
+class const PatternDialog({
+  super.key,
+  required final bool needConfirmation,
+}) extends StatefulWidget {
+  static const routeName = '/dialog/pattern';
+
+  @override
+  State<PatternDialog> createState() => _PatternDialogState();
+}
+
+class _PatternDialogState extends State<PatternDialog> {
+  bool _confirming = false;
+  String? _firstPattern;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AvesDialog(
+      content: Column(
+        mainAxisSize: .min,
+        children: [
+          Text(_confirming ? context.l10n.patternDialogConfirm : context.l10n.patternDialogEnter),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: SizedBox.square(
+              dimension: MediaQuery.sizeOf(context).shortestSide / 2,
+              child: PatternLock(
+                relativePadding: .4,
+                selectedColor: colorScheme.primary,
+                notSelectedColor: colorScheme.onSurface,
+                pointRadius: 8,
+                fillPoints: true,
+                onInputComplete: (input) => _submit(input.join()),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submit(String pattern) {
+    if (widget.needConfirmation) {
+      if (_confirming) {
+        final match = _firstPattern == pattern;
+        Navigator.maybeOf(context)?.pop<String>(match ? pattern : null);
+        if (!match) {
+          showWarningDialog(
+            context: context,
+            message: context.l10n.genericFailureFeedback,
+          );
+        }
+      } else {
+        _firstPattern = pattern;
+        setState(() => _confirming = true);
+      }
+    } else {
+      Navigator.maybeOf(context)?.pop<String>(pattern);
+    }
+  }
+}

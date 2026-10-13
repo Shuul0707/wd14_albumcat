@@ -1,0 +1,203 @@
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/settings/settings.dart';
+import 'package:aves/theme/durations.dart';
+import 'package:aves/theme/icons.dart';
+import 'package:aves/theme/styles.dart';
+import 'package:aves/theme/themes.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/common/identity/aves_filter_chip.dart';
+import 'package:aves/widgets/common/identity/buttons/outlined_button.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const TitledExpandableFilterRow({
+  super.key,
+  required final String title,
+  required final List<CollectionFilter> filters,
+  required final ValueNotifier<String?> expandedNotifier,
+  final bool showGenericIcon = true,
+  final HeroType Function(CollectionFilter filter)? heroTypeBuilder,
+  required final AFilterCallback onTap,
+  required final OffsetFilterCallback? onLongPress,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    if (filters.isEmpty) return const SizedBox();
+
+    final isExpanded = expandedNotifier.value == title;
+
+    Widget header = Text(
+      title,
+      style: AStyles.sectionTitleStyle(context.knownLocale),
+    );
+    void toggle() => expandedNotifier.value = isExpanded ? null : title;
+    if (settings.useTvLayout) {
+      header = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: InkWell(
+          onTap: toggle,
+          borderRadius: const BorderRadius.all(Radius.circular(123)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisSize: .min,
+              children: [
+                header,
+                const SizedBox(width: 16),
+                Icon(isExpanded ? AIcons.collapse : AIcons.expand),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      header = Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            header,
+            const Spacer(),
+            IconButton(
+              icon: Icon(isExpanded ? AIcons.collapse : AIcons.expand),
+              onPressed: toggle,
+              tooltip: isExpanded ? MaterialLocalizations.of(context).expandedIconTapHint : MaterialLocalizations.of(context).collapsedIconTapHint,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: .start,
+      children: [
+        header,
+        ExpandableFilterRow(
+          filters: filters,
+          isExpanded: isExpanded,
+          showGenericIcon: showGenericIcon,
+          heroTypeBuilder: heroTypeBuilder,
+          onTap: onTap,
+          onLongPress: onLongPress,
+        ),
+      ],
+    );
+  }
+}
+
+class const ExpandableFilterRow({
+  super.key,
+  required final List<CollectionFilter> filters,
+  required final bool isExpanded,
+  final bool showGenericIcon = true,
+  final Widget? Function(CollectionFilter)? leadingBuilder,
+  final HeroType Function(CollectionFilter filter)? heroTypeBuilder,
+  required final AFilterCallback onTap,
+  final AFilterCallback? onRemove,
+  required final OffsetFilterCallback? onLongPress,
+}) extends StatelessWidget {
+  static const double horizontalPadding = 8;
+  static const double verticalPadding = 8;
+  static const int topFilterCount = 50;
+
+  @override
+  Widget build(BuildContext context) {
+    if (filters.isEmpty) return const SizedBox();
+    return AnimatedSwitcher(
+      duration: ADurations.filterRowExpandAnimation,
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        children: [
+          ...previousChildren,
+          ?currentChild,
+        ],
+      ),
+      child: isExpanded
+          ? _ExpandedFilterRow(
+              filters: filters,
+              chipBuilder: _buildChip,
+            )
+          : _buildCollapsed(),
+    );
+  }
+
+  Widget _buildCollapsed() {
+    return Container(
+      // specify transparent as a workaround to prevent
+      // chip border clipping when the floating app bar is fading
+      color: Colors.transparent,
+      height: AvesFilterChip.minChipHeight,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+        itemBuilder: (context, index) {
+          return index < filters.length ? _buildChip(filters[index]) : const SizedBox();
+        },
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemCount: filters.length,
+      ),
+    );
+  }
+
+  Widget _buildChip(CollectionFilter filter) {
+    return AvesFilterChip(
+      // key is expected by test driver
+      key: Key(filter.key),
+      filter: filter,
+      allowGenericIcon: showGenericIcon,
+      leadingOverride: leadingBuilder?.call(filter),
+      heroType: heroTypeBuilder?.call(filter) ?? HeroType.onTap,
+      onTap: onTap,
+      onRemove: onRemove,
+      onLongPress: onLongPress,
+    );
+  }
+}
+
+class const _ExpandedFilterRow({
+  required final List<CollectionFilter> filters,
+  required final Widget Function(CollectionFilter filter) chipBuilder,
+}) extends StatefulWidget {
+  @override
+  State<_ExpandedFilterRow> createState() => _ExpandedFilterRowState();
+}
+
+class _ExpandedFilterRowState extends State<_ExpandedFilterRow> {
+  late final ValueNotifier<bool> _showAllNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _showAllNotifier = ValueNotifier(widget.filters.length <= ExpandableFilterRow.topFilterCount);
+  }
+
+  @override
+  void dispose() {
+    _showAllNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: ExpandableFilterRow.horizontalPadding),
+      // specify transparent as a workaround to prevent
+      // chip border clipping when the floating app bar is fading
+      color: Colors.transparent,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _showAllNotifier,
+        builder: (context, showAll, child) {
+          return Wrap(
+            spacing: ExpandableFilterRow.horizontalPadding,
+            runSpacing: ExpandableFilterRow.verticalPadding,
+            children: [
+              ...(showAll ? widget.filters : widget.filters.take(ExpandableFilterRow.topFilterCount)).map(widget.chipBuilder),
+              if (!showAll)
+                AvesOutlinedButton(
+                  label: Themes.asButtonLabel(MaterialLocalizations.of(context).moreButtonTooltip),
+                  onPressed: () => _showAllNotifier.value = true,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

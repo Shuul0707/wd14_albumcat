@@ -1,0 +1,141 @@
+import 'package:aves/model/filters/covered/stored_album.dart';
+import 'package:aves/model/filters/filters.dart';
+import 'package:aves/model/vaults/details.dart';
+import 'package:aves/model/vaults/vaults.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves/widgets/common/action_mixins/feedback.dart';
+import 'package:aves/widgets/common/extensions/build_context.dart';
+import 'package:aves/widgets/dialogs/aves_dialog.dart';
+import 'package:aves/widgets/dialogs/filter_editors/password_dialog.dart';
+import 'package:aves/widgets/dialogs/filter_editors/pattern_dialog.dart';
+import 'package:aves/widgets/dialogs/filter_editors/pin_dialog.dart';
+import 'package:flutter/services.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:material_ui/material_ui.dart';
+
+mixin VaultAwareMixin on FeedbackMixin {
+  Future<bool> _tryUnlock(BuildContext context, String dirPath) async {
+    if (!vaults.isVault(dirPath) || !vaults.isLocked(dirPath)) return true;
+
+    final details = vaults.detailsForPath(dirPath);
+    if (details == null) return false;
+
+    bool? confirmed;
+    switch (details.lockType) {
+      case .system:
+        try {
+          confirmed = await LocalAuthentication().authenticate(
+            localizedReason: context.l10n.authenticateToUnlockVault,
+          );
+        } on PlatformException catch (e, stack) {
+          if (!{'auth_in_progress', 'NotAvailable'}.contains(e.code)) {
+            // `auth_in_progress`: `Authentication in progress`
+            // `NotAvailable`: `Required security features not enabled`
+            await reportService.recordError(e, stack);
+          }
+        }
+      case .pattern:
+        final pattern = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PatternDialog(needConfirmation: false),
+          routeSettings: const RouteSettings(name: PatternDialog.routeName),
+        );
+        if (pattern != null) {
+          confirmed = pattern == await securityService.readValue(details.passKey);
+        }
+      case .pin:
+        final pin = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PinDialog(needConfirmation: false),
+          routeSettings: const RouteSettings(name: PinDialog.routeName),
+        );
+        if (pin != null) {
+          confirmed = pin == await securityService.readValue(details.passKey);
+        }
+      case .password:
+        final password = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PasswordDialog(needConfirmation: false),
+          routeSettings: const RouteSettings(name: PasswordDialog.routeName),
+        );
+        if (password != null) {
+          confirmed = password == await securityService.readValue(details.passKey);
+        }
+    }
+
+    if (confirmed == null || !confirmed) return false;
+
+    await vaults.unlock(context, dirPath);
+    return true;
+  }
+
+  Future<bool> unlockAlbum(BuildContext context, String dirPath) async {
+    final success = await _tryUnlock(context, dirPath);
+    if (!success) {
+      showFeedback(context, FeedbackType.warn, context.l10n.genericFailureFeedback);
+    }
+    return success;
+  }
+
+  Future<bool> unlockFilter(BuildContext context, CollectionFilter filter) {
+    return filter is StoredAlbumFilter ? unlockAlbum(context, filter.album) : Future.value(true);
+  }
+
+  Future<bool> unlockFilters(BuildContext context, Set<CollectionFilter> filters) async {
+    var unlocked = true;
+    await Future.forEach(filters, (filter) async {
+      if (unlocked) {
+        unlocked = await unlockFilter(context, filter);
+      }
+    });
+    return unlocked;
+  }
+
+  void lockFilters(Set<CollectionFilter> filters) => vaults.lock(filters.whereType<StoredAlbumFilter>().map((v) => v.album).toSet());
+
+  Future<bool> setVaultPass(BuildContext context, VaultDetails details) async {
+    switch (details.lockType) {
+      case .system:
+        final l10n = context.l10n;
+        try {
+          return await LocalAuthentication().authenticate(
+            localizedReason: l10n.authenticateToConfigureVault,
+          );
+        } on PlatformException catch (e, stack) {
+          await showWarningDialog(
+            context: context,
+            message: e.message ?? l10n.genericFailureFeedback,
+          );
+          await reportService.recordError(e, stack);
+        }
+      case .pattern:
+        final pattern = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PatternDialog(needConfirmation: true),
+          routeSettings: const RouteSettings(name: PatternDialog.routeName),
+        );
+        if (pattern != null) {
+          return await securityService.writeValue(details.passKey, pattern);
+        }
+      case .pin:
+        final pin = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PinDialog(needConfirmation: true),
+          routeSettings: const RouteSettings(name: PinDialog.routeName),
+        );
+        if (pin != null) {
+          return await securityService.writeValue(details.passKey, pin);
+        }
+      case .password:
+        final password = await showAvesDialog<String>(
+          context: context,
+          builder: (context) => const PasswordDialog(needConfirmation: true),
+          routeSettings: const RouteSettings(name: PasswordDialog.routeName),
+        );
+        if (password != null) {
+          return await securityService.writeValue(details.passKey, password);
+        }
+    }
+    return false;
+  }
+}

@@ -1,0 +1,175 @@
+import 'dart:async';
+
+import 'package:aves/model/app_inventory.dart';
+import 'package:aves/model/vaults/vaults.dart';
+import 'package:aves/services/common/services.dart';
+import 'package:aves_model/aves_model.dart';
+import 'package:aves_utils/aves_utils.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
+
+final AndroidFileUtils androidFileUtils = AndroidFileUtils._private();
+
+class AndroidFileUtils {
+  // cf https://developer.android.com/reference/android/content/ContentResolver#SCHEME_CONTENT
+  static const contentScheme = 'content';
+
+  // cf https://developer.android.com/reference/android/provider/MediaStore#AUTHORITY
+  static const mediaStoreAuthority = 'media';
+
+  // cf https://developer.android.com/reference/android/provider/MediaStore#VOLUME_EXTERNAL
+  static const externalVolume = 'external';
+
+  static const standardDirDcim = 'DCIM';
+  static const standardDirDownloads = 'Download';
+  static const standardDirMovies = 'Movies';
+  static const standardDirPictures = 'Pictures';
+
+  static const mediaStoreUriRoot = '$contentScheme://$mediaStoreAuthority/';
+  static const mediaUriPathRoots = {'/$externalVolume/images/', '/$externalVolume/video/'};
+
+  static const recoveryDir = 'Lost & Found';
+  static const trashDirPath = '#trash';
+
+  late final String separator, vaultRoot, primaryStorage;
+  late final String dcimPath, downloadPath, moviesPath, picturesPath, avesVideoCapturesPath;
+  late final Set<String> videoCapturesPaths;
+  Set<StorageVolume> storageVolumes = {};
+  Future<void>? _loader;
+
+  final Map<String, AlbumType> _albumTypeCache = {};
+  final AChangeNotifier albumTypesChangeNotifier = .new();
+
+  new _private();
+
+  Future<void> init() async {
+    _loader ??= _doInit();
+    await _loader;
+  }
+
+  Future<void> _doInit() async {
+    separator = pContext.separator;
+    await _initStorageVolumes();
+    vaultRoot = await storageService.getVaultRoot();
+    _initPaths();
+
+    appInventory.areAppNamesReadyNotifier.addListener(_invalidateAlbumTypeCache);
+    vaults.contentChangeNotifier.addListener(_invalidateAlbumTypeCache);
+    _invalidateAlbumTypeCache();
+  }
+
+  Future<void> _initStorageVolumes() async {
+    storageVolumes = await storageService.getStorageVolumes();
+    if (storageVolumes.isEmpty) {
+      // this can happen when the device is booting up
+      debugPrint('Storage volume list is empty. Retrying in a second...');
+      await Future.delayed(const Duration(seconds: 1));
+      await _initStorageVolumes();
+    }
+  }
+
+  void _initPaths() {
+    primaryStorage = storageVolumes.firstWhereOrNull((volume) => volume.isPrimary)?.path ?? separator;
+    // standard dirs
+    dcimPath = pContext.join(primaryStorage, standardDirDcim);
+    // effective download path may have a different case
+    downloadPath = pContext.join(primaryStorage, standardDirDownloads).toLowerCase();
+    moviesPath = pContext.join(primaryStorage, standardDirMovies);
+    picturesPath = pContext.join(primaryStorage, standardDirPictures);
+    // custom dirs
+    avesVideoCapturesPath = pContext.join(dcimPath, 'Video Captures');
+    videoCapturesPaths = {
+      // from Samsung
+      pContext.join(dcimPath, 'Videocaptures'),
+      // from Aves
+      avesVideoCapturesPath,
+    };
+  }
+
+  bool isCameraPath(String path) => path.startsWith(dcimPath) && (path.endsWith('${separator}Camera') || path.endsWith('${separator}100ANDRO'));
+
+  bool isScreenshotsPath(String path) => (path.startsWith(dcimPath) || path.startsWith(picturesPath)) && path.endsWith('${separator}Screenshots');
+
+  bool isScreenRecordingsPath(String path) => (path.startsWith(dcimPath) || path.startsWith(moviesPath)) && (path.endsWith('${separator}Screen recordings') || path.endsWith('${separator}ScreenRecords'));
+
+  bool isVideoCapturesPath(String path) => videoCapturesPaths.contains(path);
+
+  bool isDownloadPath(String path) => path.toLowerCase() == downloadPath;
+
+  StorageVolume? getStorageVolume(String? anyPath) {
+    if (anyPath == null) return null;
+    final volume = storageVolumes.firstWhereOrNull((v) => anyPath.startsWith(v.path));
+    // storage volume path includes trailing '/', but argument path may or may not,
+    // which is an issue when the path is at the root
+    return volume != null || anyPath.endsWith(separator) ? volume : getStorageVolume('$anyPath$separator');
+  }
+
+  Future<Map<StorageVolume, String>> getBinRestoreRecoveryPathByVolume() async {
+    String recoveryPathForStorageVolume(String volumePath) {
+      final picturesPath = pContext.join(volumePath, standardDirPictures);
+      return pContext.join(picturesPath, recoveryDir);
+    }
+
+    final primaryRecoveryPath = recoveryPathForStorageVolume(primaryStorage);
+    final recoveryPathByVolume = Map.fromEntries(
+      await Future.wait(
+        storageVolumes.map((volume) async {
+          final recoveryPath = recoveryPathForStorageVolume(volume.path);
+          final recoveryApiByDir = await storagePermissionService.getEditionApis({recoveryPath}, insertion: true);
+          final isRestricted = recoveryApiByDir.entries.any((kv) => kv.value.isEmpty);
+          return MapEntry(volume, isRestricted ? primaryRecoveryPath : recoveryPath);
+        }),
+      ),
+    );
+    return recoveryPathByVolume;
+  }
+
+  String? ensureTrailingSeparator(String? dirPath) {
+    if (dirPath == null) return null;
+    return dirPath.endsWith(separator) ? dirPath : dirPath + separator;
+  }
+
+  String? removeTrailingSeparator(String? dirPath) {
+    if (dirPath == null) return null;
+    return dirPath.endsWith(separator) ? dirPath.substring(0, dirPath.length - 1) : dirPath;
+  }
+
+  // prefer static method over a null returning factory constructor
+  VolumeRelativeDirectory? relativeDirectoryFromPath(String dirPath) {
+    final volume = getStorageVolume(dirPath);
+    if (volume == null) return null;
+
+    final root = volume.path;
+    final rootLength = root.length;
+    return VolumeRelativeDirectory(
+      volumePath: root,
+      relativeDir: dirPath.length < rootLength ? '' : dirPath.substring(rootLength),
+    );
+  }
+
+  bool isOnRemovableStorage(String path) => getStorageVolume(path)?.isRemovable ?? false;
+
+  void _invalidateAlbumTypeCache() {
+    _albumTypeCache.clear();
+    albumTypesChangeNotifier.notify();
+  }
+
+  AlbumType getAlbumType(String dirPath) {
+    final result = _albumTypeCache.putIfAbsent(dirPath, () {
+      if (vaults.isVault(dirPath)) return AlbumType.vault;
+
+      if (isCameraPath(dirPath)) return AlbumType.camera;
+      if (isDownloadPath(dirPath)) return AlbumType.download;
+      if (isScreenRecordingsPath(dirPath)) return AlbumType.screenRecordings;
+      if (isScreenshotsPath(dirPath)) return AlbumType.screenshots;
+      if (isVideoCapturesPath(dirPath)) return AlbumType.videoCaptures;
+
+      // do not restrict to directories on primary storage, as the directory could
+      // legitimately be elsewhere (e.g. Dual Messenger storage in `/storage/emulated/95/`)
+      if (appInventory.isPotentialAppDir(dirPath)) return AlbumType.app;
+
+      return AlbumType.regular;
+    });
+    return result;
+  }
+}

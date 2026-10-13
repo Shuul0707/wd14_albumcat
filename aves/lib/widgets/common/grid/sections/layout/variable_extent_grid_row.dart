@@ -1,0 +1,151 @@
+import 'package:aves/widgets/common/grid/sections/layout/variable_extent_section_layout.dart';
+import 'package:collection/collection.dart';
+import 'package:flutter/rendering.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const VariableExtentGridRow({
+  super.key,
+  required final VariableExtentRowLayout rowLayout,
+  required final double spacing,
+  required final TextDirection textDirection,
+  required super.children,
+}) extends MultiChildRenderObjectWidget {
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return RenderVariableExtentGridRow(
+      rowLayout: rowLayout,
+      spacing: spacing,
+      textDirection: textDirection,
+    );
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, RenderVariableExtentGridRow renderObject) {
+    renderObject.rowLayout = rowLayout;
+    renderObject.spacing = spacing;
+    renderObject.textDirection = textDirection;
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty<VariableExtentRowLayout>('rowLayout', rowLayout));
+    properties.add(DoubleProperty('spacing', spacing));
+    properties.add(EnumProperty<TextDirection>('textDirection', textDirection));
+  }
+}
+
+class _GridRowParentData extends ContainerBoxParentData<RenderBox>;
+
+class RenderVariableExtentGridRow extends RenderBox with ContainerRenderObjectMixin<RenderBox, _GridRowParentData>, RenderBoxContainerDefaultsMixin<RenderBox, _GridRowParentData> {
+  new({
+    List<RenderBox>? children,
+    required this._rowLayout,
+    required this._spacing,
+    required this._textDirection,
+  }) {
+    addAll(children);
+  }
+
+  VariableExtentRowLayout get rowLayout => _rowLayout;
+  VariableExtentRowLayout _rowLayout;
+
+  set rowLayout(VariableExtentRowLayout value) {
+    if (_rowLayout == value) return;
+    _rowLayout = value;
+    markNeedsLayout();
+  }
+
+  double get spacing => _spacing;
+  double _spacing;
+
+  set spacing(double value) {
+    if (_spacing == value) return;
+    _spacing = value;
+    markNeedsLayout();
+  }
+
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+
+  set textDirection(TextDirection value) {
+    if (_textDirection == value) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _GridRowParentData) {
+      child.parentData = _GridRowParentData();
+    }
+  }
+
+  double get intrinsicWidth => rowLayout.itemWidths.sum + spacing * (childCount - 1);
+
+  @override
+  double computeMinIntrinsicWidth(double height) => intrinsicWidth;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => intrinsicWidth;
+
+  @override
+  double computeMinIntrinsicHeight(double width) => rowLayout.height;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) => rowLayout.height;
+
+  @override
+  void performLayout() {
+    var child = firstChild;
+    if (child == null) {
+      size = constraints.smallest;
+      return;
+    }
+    final thumbnailHeight = rowLayout.height - spacing;
+    size = Size(constraints.maxWidth, constraints.maxHeight);
+    final flipMainAxis = textDirection == TextDirection.rtl;
+    var i = 0;
+    double offsetX = flipMainAxis ? size.width : 0;
+    while (child != null) {
+      final thumbnailWidth = rowLayout.itemWidths[i];
+      final childConstraints = BoxConstraints.tight(Size(thumbnailWidth, thumbnailHeight));
+      child.layout(childConstraints, parentUsesSize: false);
+      final childParentData = child.parentData! as _GridRowParentData;
+      if (flipMainAxis) {
+        offsetX -= thumbnailWidth;
+      }
+      childParentData.offset = Offset(offsetX, 0);
+      if (flipMainAxis) {
+        offsetX -= spacing;
+      } else {
+        offsetX += thumbnailWidth + spacing;
+      }
+      child = childParentData.nextSibling;
+      i++;
+    }
+  }
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    return defaultComputeDistanceToHighestActualBaseline(baseline);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty<VariableExtentRowLayout>('rowLayout', rowLayout));
+    properties.add(DoubleProperty('spacing', spacing));
+    properties.add(EnumProperty<TextDirection>('textDirection', textDirection));
+  }
+}
