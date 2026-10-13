@@ -8,7 +8,7 @@
 
 ### 数据怎么分家
 
-改的是 fork 的这些地方（源码在 `.tmp\aves-src`，upstream 是 Aves 1.15.5）：
+改的是 fork 的这些地方（源码就是仓库里的 `aves/`，upstream 是 Aves 1.15.5）：
 
 | 文件 | 改动 |
 |---|---|

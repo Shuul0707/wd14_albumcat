@@ -2,18 +2,9 @@
 
 WHY THIS EXISTS
 ---------------
-Route A ("write XMP into the photo") was dropped because of a real objection:
-
-    "我反对这种直接改写照片数据的方法，本质是有些破坏性的，
-     比如会重置修改日期导致相册中排序混乱"
-
-Rewriting a JPEG's APP1 segment cannot preserve the modification time: the file
-is replaced, `MediaScannerConnection` re-scans it, and the gallery re-sorts by
-the new date. So the fork keeps the AI tags in Aves' own SQLite database
-(`appTags` table) and never touches the image bytes.
-
-That leaves exactly two claims that have to be checked on a real device, and
-neither one can be checked from the desktop:
+The AI tags live in Aves' own SQLite database (`appTags` table); the image bytes
+are never touched. That leaves exactly two claims that have to be checked on a
+real device, and neither one can be checked from the desktop:
 
   1. the tags really landed in `appTags` -- which means the Dart service
      reached the PC server, mapped the ids back to entries, and persisted them

@@ -11,12 +11,13 @@ tools\aves_build.ps1                                      # 模拟器 x86_64
 tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 真机 arm64
 ```
 
-⚠️ fork 的源码**不在这个仓库里**：它是 [`deckerst/aves`](https://github.com/deckerst/aves) 的一份副本，
-放在本机的 `.tmp\aves-src\`（改动清单见 [设计说明](DESIGN.md)）。所以上面两条命令要在那台已经打好改动的
-工作机上跑，没打过改动的 upstream 是构建不出 AI 打标签页的。
+⚠️ fork 的源码就在仓库的 `aves/` 下（[`deckerst/aves`](https://github.com/deckerst/aves) 的一份副本，
+改了什么见 [设计说明](DESIGN.md)，构建细节见 [aves/FORK.md](../aves/FORK.md)）。第一次构建要装
+JDK 21 + Flutter 3.47.6，首次 `flutter build` 会自己生成 `android/gradlew` 与
+wrapper，这两个文件用不着入库。
 
-产物是 `build\app\outputs\flutter-apk\app-libre-debug.apk`，两个平台都约 252 MB
-（debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都带进来了）。
+产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（x64 约 188 MB、arm64 约 204 MB；
+debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都带进来了）。
 
 ⚠️ **ABI 必须选对**：`-Platform android-x64` 的包里只有 `lib/x86_64/libflutter.so`，
 `-Platform android-arm64` 的包里只有 `lib/arm64-v8a/libflutter.so`；两者的另一套 ABI 只有插件库、
@@ -26,7 +27,7 @@ tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 真机 arm64
 `~\.gradle\init.d\zz-mirrors.gradle`（Gradle 全局 init 脚本，把 `dl.google.com`、`repo1.maven.org`、
 `plugins.gradle.org` 重写到阿里云）、`PUB_HOSTED_URL=https://pub.flutter-io.cn` +
 `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn`、Android SDK 包从腾讯镜像装
-（`.tmp\install_sdk_pkg.py`；这条线上 `dl.google.com` 只有 21 KiB/s，腾讯镜像 26 MB/s）。
+（`tools\setup_android.py` + `tools\sdk_install.py`；这条线上 `dl.google.com` 只有 21 KiB/s，腾讯镜像 26 MB/s）。
 
 ## 验证
 
@@ -81,28 +82,34 @@ albumcat/
 │  ├─ pipeline.py               串起 扫描→推理→插件→规则
 │  ├─ types.py                  Prediction / TagSet / TagPlan
 │  ├─ config.py                 配置加载
-│  └─ cli.py                    命令行
+│  ├─ cli.py                    命令行
+│  └─ tagfields.py              flat / hierarchical 标签字段（手机端存的就是 flat 那份）
 ├─ tools/
 │  ├─ download_model.py         模型下载（纯标准库，可续传）
 │  ├─ add_feature_output.py     给模型加特征输出（替代上游 1.2GB 拆分模型）
 │  ├─ check_feature_plugin.py   feature 插件链路自检
-│  ├─ setup_android.py          下载 Android SDK（绕开坏掉的 Windows TLS）
-│  ├─ make_aves_probe.py        生成「哨兵标签」探针图（3 张 JPEG + 1 张 PNG），验证 Aves 读不读 XMP
-│  ├─ aves_build.ps1            构建 Aves fork 的 APK（-Platform android-x64 / android-arm64）
+│  ├─ check_firewall.py         防火墙自检
+│  ├─ check_plan_batch.py       /plan_batch 批量接口自检（自带一个临时服务端）
+│  ├─ make_aves_probe.py        把样例图拷成 4 张探针图（端到端验证用）
+│  ├─ make_alpha_probe.py       造一张带透明通道的 PNG，验证取图时透明像素被压成白底
+│  ├─ aves_build.ps1            构建 aves/ 的 APK（-Platform android-x64 / android-arm64）
 │  ├─ verify_aves_tags.py       Aves fork 端到端验证：探针文件哈希/时间戳不变 + appTags 逐文件断言
 │  ├─ phone_link.cmd            没有局域网时用数据线：adb reverse 把手机的 127.0.0.1:8899 接到电脑
+│  ├─ slow_proxy.py             假服务端：第 N 批之后开始返 503，用来量「中途断了会不会丢标签」
 │  ├─ check_all.cmd             一条命令跑全部自检（纯 ASCII 薄壳）
 │  ├─ check_all.py              自检清单本体，从便宜到贵排序
 │  ├─ install_deps.cmd          依赖安装（建 venv + 清华源）
 │  ├─ allow_firewall.cmd        一键允许 8899 入站（会弹 UAC）
 │  ├─ albumcat.cmd              PC 端命令入口
-│  └─ probe_*.py                环境/接口探测脚本
+│  ├─ setup_android.py          下载 Android SDK（绕开坏掉的 Windows TLS）
+│  └─ sdk_install.py            把 SDK 包解到指定目录（给 setup_android.py 和手工安装共用）
 ├─ plugins/                     插件目录（见 plugins/README.md）
 ├─ models/vit/                  model.onnx + model_features.onnx + selected_tags.csv
 ├─ third_party/wd14-API-onnx/   上游项目（MIT），保留作参考实现
-├─ dist/                        构建好的 Aves fork 安装包（arm64 给真机 / x64 给模拟器；不进仓库）
+├─ aves/                        手机端 Aves 的 fork 源码（改了什么、怎么构建见 aves/FORK.md）
+├─ dist/                        构建好的 fork 安装包（arm64 给真机 / x64 给模拟器；不进仓库）
 ├─ docs/evidence/               验证截图（按角色浏览、筛选、打标页）
-└─ .tmp/aves-src/               Aves fork 的工作副本（改动见 DESIGN.md；不进主仓库）
+└─ .tmp/                        scratch：日志、拉下来的库、一次性脚本（不进仓库）
 ```
 
 ---

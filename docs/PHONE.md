@@ -123,27 +123,25 @@ REM 端口不是 8899 时：tools\allow_firewall.cmd 9000
 
 ### Aves 那一端，在设备上也是验过的
 
-模拟器上装了 Aves（F-Droid 的 libre 构建），把带哨兵标签的照片推进相册，
-让它索引完，然后**直接把它的数据库拉出来看**——比截图可靠得多：
+模拟器上装了 fork 的 APK，让它把相册索引完，用「AI 打标签」跑一轮，然后**直接把它的
+数据库拉出来看**——比截图可靠得多：
 
 ```
 adb root
-adb pull /data/data/deckers.thibault.aves.libre/databases/metadata.db
+adb pull /data/data/deckers.thibault.aves.libre.debug/databases/metadata.db
 ```
 
-`metadata` 表里那两行（列名就叫 `xmpSubjects`，分隔符是 `;`）：
+AI 打上的标签落在 `appTags` 表里（一行一个文件 id，值用 `;` 分隔，例如
+`角色|Hakurei Reimu;角色|Shameimaru Aya`）。Aves 自己的 `metadata` 表里另有一列
+`xmpSubjects`，存的是照片文件自带的标签：**界面上看到的是这两者的并集**，而往文件里
+回写时只有文件自带那部分会被考虑。真实标注的 12 张照片跑完后重开 Aves，库里每一行
+都对得上。
 
-```
-AVES-PROBE-1234;Hakurei Reimu;Touhou Project;1girl;角色|AVES-PROBE-1234;角色|Hakurei Reimu;作品|Touhou Project   rating=4
-AVES-PROBE-1234;Shameimaru Aya;Touhou Project;1girl;角色|AVES-PROBE-1234;角色|Shameimaru Aya;作品|Touhou Project   rating=4
-```
+层级路径是**原样到达**的：Aves 不会把它拆成树，`角色|X` 就是它眼里一个带竖线的普通
+标签，但点它能筛出所有 X 的照片。
 
-一行是 PNG、一行是 JPEG，内容一样。这同时证明了三件事：Aves 读的确实是 `dc:subject`；
-层级路径**原样到达**（它不会拆成树，`角色|X` 就是它眼里一个带竖线的普通标签，但点它能筛出
-所有 X 的照片）；`xmp:Rating` 也读到了。真实标注的 4 张照片跑完后重开 Aves，它的库里同样
-出现了我们写进去的那几串标签。
-
-注意 libre 构建的**包名不是 `deckers.thibault.aves`，而是 `deckers.thibault.aves.libre`**。
+注意 libre 构建的**包名不是 `deckers.thibault.aves`，而是 `deckers.thibault.aves.libre`**
+（debug 版再加 `.debug`）。`tools\verify_aves_tags.py` 把这一段做成了 11 项自动断言。
 
 ---
 

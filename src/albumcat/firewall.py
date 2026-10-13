@@ -1,6 +1,6 @@
 """Windows inbound-firewall preflight for ``albumcat serve``.
 
-The PC half of Route A is an HTTP service the phone talks to over Wi-Fi.  If
+The PC half is an HTTP service the phone talks to over Wi-Fi.  If
 Windows will not let our Python process accept an inbound TCP connection on
 that port, the phone simply times out -- and *nothing on the PC looks wrong*,
 because loopback traffic is exempt from the firewall.  ``curl
