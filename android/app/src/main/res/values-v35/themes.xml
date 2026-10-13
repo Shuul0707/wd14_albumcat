@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 15 (API 35) forces edge to edge. The inset listener in
+  MainActivity.buildUi() handles that correctly on its own, so this file is
+  belt and braces: opting out restores the classic behaviour where the system
+  bar takes layout space, which is one fewer thing that has to be right. The
+  attribute is unknown before API 35, which is why it lives in values-v35.
+
+  Deliberately not relied on alone: it is ignored from API 36 on, and the
+  listener is what keeps this correct there.
+
+  (No double hyphen anywhere in these comments: XML forbids it, and aapt2
+  rejects the file with an error that reads as gibberish in a GBK console.)
+-->
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

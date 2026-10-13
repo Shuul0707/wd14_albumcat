@@ -1,0 +1,126 @@
+# albumcat configuration.
+#
+# Every value here is optional -- the defaults live in src/albumcat/config.py.
+# Anything you set overrides the default; anything you leave out keeps it.
+# Unknown keys are an error (so typos are caught instead of silently ignored).
+#
+# Environment variables override this file:  ALBUMCAT_<SECTION>_<FIELD>
+# e.g. ALBUMCAT_IMMICH_API_KEY=abc, ALBUMCAT_PUBLISH_DRY_RUN=false
+
+[model]
+# Directory holding model.onnx + selected_tags.csv.
+# Run `python tools/download_model.py` to populate it, or point this at a
+# model you downloaded by hand.
+dir = "models/vit"
+
+# "auto" picks DirectML > CUDA > CPU in that order.
+# Force one with "dml", "cuda" or "cpu".
+device = "auto"
+
+# General tags (hair colour, pose, ...) are kept at or above this score.
+threshold = 0.35
+
+# Characters need a higher bar -- WD14 has thousands of character labels and
+# false positives are much more annoying than a missing tag. The upstream
+# README recommends at least 0.5.
+character_threshold = 0.5
+
+# Images per ONNX call. This is a *request* -- the WD14 vit export pins its
+# batch axis to 1, so in practice images are processed one at a time. Measured
+# on an RTX 5060 (DirectML): ~102 ms/image, vs ~627 ms/image on CPU. Only a
+# model re-exported with a dynamic batch axis would use a larger value.
+batch_size = 8
+
+# DirectML shares VRAM with everything else on the GPU (the desktop, games,
+# a browser). 4 GB is a safe ceiling on an 8 GB card.
+gpu_mem_limit_mb = 4096
+
+[immich]
+base_url = "http://127.0.0.1:2283"
+
+# Create one in Immich: Account Settings -> API Keys.
+# Keep this file out of version control once you fill it in, or set
+# ALBUMCAT_IMMICH_API_KEY in the environment instead.
+api_key = ""
+
+# Set to false only for a self-signed certificate.
+verify_tls = true
+timeout = 60.0
+
+# Parallel thumbnail downloads while scanning the library.
+download_concurrency = 4
+
+[publish]
+# Where tags land. Tags are hierarchical: a character called "Hatsune Miku"
+# becomes  角色/Hatsune Miku  (in XMP that is written as  角色|Hatsune Miku ).
+#
+# Immich renders this as a tree in the tag sidebar, and so do digiKam and
+# Lightroom. Aves does NOT -- it treats "角色|Hatsune Miku" as one flat tag
+# name (it reads only dc:subject, split on ";", and has no hierarchy concept).
+# That still works for browsing: tapping the tag filters to that character.
+#
+# The same roots drive both routes:
+#   route A (`albumcat tag`) writes them into the JPEG's own XMP
+#   route B (`albumcat run`) creates them as Immich tags
+character_root = "角色"
+series_root = "作品"
+copyright_root = "版权"
+rating_root = "分级"
+
+# Write a 分级/... tag derived from the WD14 rating head.
+rating_enabled = true
+# Minimum score before a rating tag is applied at all.
+rating_threshold = 0.5
+
+# Also write the 1-5 star rating (Immich's rating field, or XMP's xmp:Rating).
+# Off by default because it can overwrite stars you set by hand.
+write_star_rating = false
+
+# The review band. A character scoring between review_low and review_high is
+# plausible but not certain:
+#   score < review_low                  -> dropped
+#   review_low <= score < review_high   -> flagged, published only if
+#                                          publish_review_band is true
+#   score >= review_high                -> published
+review_low = 0.5
+review_high = 0.7
+publish_review_band = false
+
+# Keep the tag list tidy: a picture of a crowd can match dozens of characters
+# and hundreds of general tags. These cap what actually gets written; the
+# highest-scoring entries win.
+max_characters_per_image = 3
+max_general_tags_per_image = 25
+
+# General tags that are never published (exact match on the WD14 tag key).
+# Handy for stripping noise like "commentary" or "watermark".
+general_tag_denylist = []
+
+# Route A only. The tag *tree* (lr:HierarchicalSubject / digiKam:TagsList and
+# Immich's tag tree) carries only 角色 / 作品 / 分级 / 版权 by default, because
+# twenty-odd booru tags per photo would bury the character tags. General tags
+# still go into the flat dc:subject bag either way, so they stay searchable.
+# Turn this on to put them in the tree too.
+general_tags_in_tree = false
+
+# Route A only, and important for the phone: also list the tree paths
+# ("角色|Hatsune Miku") in dc:subject. Aves builds a photo's tags from
+# dc:subject alone -- its native reader looks up XMP.DC_SUBJECT_PROP_NAME and
+# splits on ";", and it never reads lr:HierarchicalSubject or
+# digiKam:TagsList. With this off, a phone running Aves would show the bare
+# name "Hatsune Miku" but no "角色|Hatsune Miku" to tap.
+# Only turn it off if you browse exclusively in digiKam / Lightroom, where the
+# duplicate entries are just noise.
+tree_in_subject = true
+
+# Safety catch: `albumcat run` refuses to touch Immich unless you pass
+# --apply. Set this to false to make writing the default.
+dry_run = true
+
+[plugins]
+# Enable the plugin registry. See src/albumcat/plugins.py for the format.
+enabled = true
+dir = "plugins"
+
+# Plugin ids to skip without deleting them.
+disabled = []

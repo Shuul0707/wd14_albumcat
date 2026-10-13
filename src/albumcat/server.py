@@ -1,0 +1,447 @@
+"""The tagging service the phone talks to (route A, PC side).
+
+Route A splits the work in two:
+
+    phone  : walk its own gallery, build a 448px thumbnail per photo
+    PC     : ID the thumbnail, apply the rules, hand back the *finished* tag set
+    phone  : splice that tag set into the photo's own XMP
+
+The PC deliberately returns a finished answer -- flat keywords, hierarchical
+paths, star rating -- rather than raw WD14 scores. That way the rules, the
+thresholds, the plugin registry and the denylist all live in one place and the
+phone stays a dumb applier. Changing a threshold here changes behaviour on the
+phone with no app rebuild.
+
+Venue: LAN only, no cloud. Nothing but a downscaled thumbnail ever leaves the
+phone, and the original photo never leaves the device at all.
+
+Endpoints
+    GET  /health    liveness + what model/plugins are loaded
+    GET  /config    the roots and thresholds the phone should agree with
+    POST /plan      one image  -> one finished tag set
+    POST /plan_batch  [{...}, ...] -> [{...}, ...]
+
+Request body for /plan, either form:
+
+    JSON   {"id": "...", "name": "...", "size": 123, "date_taken": 0,
+            "image": "<base64 jpeg>"}
+    RAW    body is the JPEG bytes; pass ?id=... or X-Albumcat-Id
+
+Usage:
+    tools\\albumcat.cmd serve                 # 0.0.0.0:8899
+    tools\\albumcat.cmd serve --port 9000 --token secret
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import io
+import json
+import logging
+import socket
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+from .config import Config
+from .pipeline import Pipeline, load_tagger
+from .publishers import plan_to_xmp_fields
+
+__all__ = ["TaggingService", "serve"]
+
+log = logging.getLogger("albumcat.server")
+
+PLAN_VERSION = 1
+MAX_BODY = 32 * 1024 * 1024  # a 448px thumbnail is ~50 KB; 32 MB is pure paranoia
+
+
+def _lan_ips() -> list[str]:
+    """Best-effort list of this machine's LAN addresses, to print at startup."""
+    ips: list[str] = []
+    try:
+        # No packet is actually sent; this just asks the routing table which
+        # local address would be used to reach the outside world.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ips.append(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip not in ips and not ip.startswith("127."):
+                ips.append(ip)
+    except OSError:
+        pass
+    return ips
+
+
+class TaggingService:
+    """Loads the model once and answers plan requests."""
+
+    def __init__(self, config: Config, *, warmup: bool = True) -> None:
+        self.config = config
+        self.pipeline = Pipeline(config, tagger=load_tagger(config, warmup=warmup))
+        self._lock = threading.Lock()
+        self._cache: dict[str, dict] = {}
+        self._cache_order: list[str] = []
+        self.cache_hits = 0
+        self.started = time.time()
+
+    # -- introspection ----------------------------------------------------- #
+
+    @property
+    def tagger(self):
+        return self.pipeline.tagger
+
+    def health(self) -> dict:
+        plugins: list[dict] = []
+        plugin_errors: list[str] = []
+        reg = self.pipeline.registry
+        if reg is not None:
+            plugins = [
+                {"id": m.id, "kind": m.kind, "target": m.target, "priority": m.priority}
+                for m in reg.active()
+            ]
+            plugin_errors = [f"{pid}: {why}" for pid, why in reg.errors]
+        return {
+            "status": "ok",
+            "service": "albumcat",
+            "plan_version": PLAN_VERSION,
+            "model": self.tagger.describe() if self.tagger else None,
+            "plugins": plugins,
+            "plugin_errors": plugin_errors,
+            "uptime_s": round(time.time() - self.started, 1),
+            "cache": {"entries": len(self._cache), "hits": self.cache_hits},
+        }
+
+    def config_view(self) -> dict:
+        p = self.config.publish
+        return {
+            "plan_version": PLAN_VERSION,
+            "character_root": p.character_root,
+            "series_root": p.series_root,
+            "copyright_root": p.copyright_root,
+            "rating_root": p.rating_root,
+            "rating_enabled": p.rating_enabled,
+            "write_star_rating": p.write_star_rating,
+            "review_low": p.review_low,
+            "review_high": p.review_high,
+            "publish_review_band": p.publish_review_band,
+            "max_characters_per_image": p.max_characters_per_image,
+            "max_general_tags_per_image": p.max_general_tags_per_image,
+            "threshold": self.config.model.threshold,
+            "character_threshold": self.config.model.character_threshold,
+        }
+
+    # -- work -------------------------------------------------------------- #
+
+    def _remember(self, key: str, payload: dict) -> None:
+        self._cache[key] = payload
+        self._cache_order.append(key)
+        limit = 4096
+        while len(self._cache_order) > limit:
+            self._cache.pop(self._cache_order.pop(0), None)
+
+    def plan_bytes(
+        self,
+        data: bytes,
+        *,
+        asset_id: str = "",
+        name: str = "",
+        size: int = 0,
+        date_taken: int = 0,
+        use_cache: bool = True,
+    ) -> dict:
+        """Tag one already-encoded image and return the finished tag set."""
+        from PIL import Image  # local import: keeps module import cheap
+
+        digest = hashlib.sha256(data).hexdigest()
+        started = time.perf_counter()
+        if use_cache and digest in self._cache:
+            self.cache_hits += 1
+            cached = dict(self._cache[digest])
+            cached["id"] = asset_id or cached.get("id", "")
+            cached["cached"] = True
+            # report the cache lookup, not the inference that filled it
+            cached["ms"] = round((time.perf_counter() - started) * 1000, 2)
+            return cached
+
+        try:
+            with Image.open(io.BytesIO(data)) as im:
+                im.load()
+                image = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+        except Exception as exc:  # noqa: BLE001 - any decode failure is a bad request
+            raise ValueError(f"cannot decode image: {type(exc).__name__}: {exc}") from exc
+
+        # onnxruntime sessions are thread-safe, but serialising here keeps the
+        # GPU from being oversubscribed when several phones sync at once.
+        with self._lock:
+            plan, tagset = self.pipeline.plan_image(image, asset_id=asset_id, path=name)
+
+        flat, hierarchical = plan_to_xmp_fields(plan, self.config.publish)
+        star = plan.star_rating if self.config.publish.write_star_rating else None
+
+        payload = {
+            "ok": True,
+            "plan_version": PLAN_VERSION,
+            "id": asset_id,
+            "name": name,
+            "size": size,
+            "date_taken": date_taken,
+            # exactly what belongs in the photo's XMP
+            "flat": flat,
+            "hierarchical": hierarchical,
+            "rating": star or 0,
+            # why, so the phone (or you) can show a review list
+            "needs_review": plan.needs_review,
+            "star_rating": plan.star_rating,
+            "notes": list(plan.notes),
+            "characters": [
+                {
+                    "key": p.key,
+                    "label": p.display,
+                    "series": p.series,
+                    "score": round(p.score, 4),
+                    "source": p.source,
+                }
+                for p in tagset.characters
+            ],
+            "tags": [
+                {"key": p.key, "label": p.display, "score": round(p.score, 4), "source": p.source}
+                for p in tagset.general
+            ],
+            "ratings": {k: round(v, 4) for k, v in tagset.ratings.items()},
+            "engine": {
+                "model": Path(self.config.model.dir).name,
+                "device": self.config.model.device,
+                "threshold": self.config.model.threshold,
+                "character_threshold": self.config.model.character_threshold,
+            },
+            "ms": round((time.perf_counter() - started) * 1000, 1),
+            "cached": False,
+        }
+        if use_cache:
+            self._remember(digest, payload)
+        return payload
+
+
+# --------------------------------------------------------------------------- #
+# HTTP
+
+
+class _Handler(BaseHTTPRequestHandler):
+    server_version = "albumcat"
+    protocol_version = "HTTP/1.1"
+
+    # injected by make_handler
+    service: TaggingService
+    token: str = ""
+
+    # -- plumbing ---------------------------------------------------------- #
+
+    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A003
+        log.debug("%s - %s", self.address_string(), fmt % args)
+
+    def _send(self, code: int, payload: dict) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _error(self, code: int, message: str, *, asset_id: str = "") -> None:
+        self._send(code, {"ok": False, "id": asset_id, "error": message})
+
+    def _authed(self) -> bool:
+        if not self.token:
+            return True
+        given = self.headers.get("X-Albumcat-Token", "")
+        return given == self.token
+
+    def _read_body(self) -> bytes:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0:
+            return b""
+        if length > MAX_BODY:
+            raise ValueError(f"body too large ({length} bytes)")
+        return self.rfile.read(length)
+
+    def _query(self) -> dict[str, list[str]]:
+        return parse_qs(urlparse(self.path).query)
+
+    # -- routes ------------------------------------------------------------ #
+
+    def do_GET(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path in ("/", "/health"):
+            self._send(200, self.service.health())
+            return
+        if path == "/config":
+            self._send(200, self.service.config_view())
+            return
+        self._error(404, f"no such endpoint: {path}")
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/")
+        if path not in ("/plan", "/plan_batch"):
+            self._error(404, f"no such endpoint: {path}")
+            return
+        if not self._authed():
+            self._error(401, "bad or missing X-Albumcat-Token")
+            return
+        try:
+            raw = self._read_body()
+        except ValueError as exc:
+            self._error(413, str(exc))
+            return
+        if not raw:
+            self._error(400, "empty body")
+            return
+
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        try:
+            if path == "/plan":
+                self._send(200, self._handle_one(raw, ctype))
+            else:
+                self._send(200, self._handle_batch(raw, ctype))
+        except ValueError as exc:
+            self._error(400, str(exc))
+        except Exception as exc:  # noqa: BLE001 - never kill the connection silently
+            log.exception("plan failed")
+            self._error(500, f"{type(exc).__name__}: {exc}")
+
+    # -- payload handling -------------------------------------------------- #
+
+    @staticmethod
+    def _decode_b64(value: str) -> bytes:
+        if value.startswith("data:"):
+            _, _, value = value.partition(",")
+        try:
+            return base64.b64decode(value, validate=False)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(f"bad base64 image: {exc}") from exc
+
+    def _one_from_json(self, obj: dict) -> dict:
+        image = obj.get("image") or obj.get("data")
+        if not isinstance(image, str) or not image:
+            raise ValueError("missing 'image' (base64)")
+        return self.service.plan_bytes(
+            self._decode_b64(image),
+            asset_id=str(obj.get("id") or ""),
+            name=str(obj.get("name") or ""),
+            size=int(obj.get("size") or 0),
+            date_taken=int(obj.get("date_taken") or 0),
+            use_cache=bool(obj.get("cache", True)),
+        )
+
+    def _handle_one(self, raw: bytes, ctype: str) -> dict:
+        q = self._query()
+        if ctype == "application/json" or raw[:1] in (b"{", b"["):
+            try:
+                obj = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError(f"bad JSON: {exc}") from exc
+            if not isinstance(obj, dict):
+                raise ValueError("expected a JSON object")
+            return self._one_from_json(obj)
+        # raw image bytes
+        asset_id = (
+            self.headers.get("X-Albumcat-Id")
+            or (q.get("id") or [""])[0]
+        )
+        return self.service.plan_bytes(
+            raw,
+            asset_id=asset_id,
+            name=(q.get("name") or [""])[0],
+            size=len(raw),
+        )
+
+    def _handle_batch(self, raw: bytes, ctype: str) -> dict:
+        try:
+            objs = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"bad JSON: {exc}") from exc
+        if isinstance(objs, dict):
+            objs = objs.get("images")
+        if not isinstance(objs, list):
+            raise ValueError("expected a JSON array of requests")
+        if len(objs) > 256:
+            raise ValueError(f"too many images ({len(objs)} > 256)")
+
+        started = time.perf_counter()
+        results = []
+        for obj in objs:
+            if not isinstance(obj, dict):
+                results.append({"ok": False, "error": "expected an object"})
+                continue
+            try:
+                results.append(self._one_from_json(obj))
+            except ValueError as exc:
+                results.append({"ok": False, "id": str(obj.get("id") or ""), "error": str(exc)})
+        return {
+            "ok": True,
+            "plan_version": PLAN_VERSION,
+            "results": results,
+            "total": len(results),
+            "failed": sum(1 for r in results if not r.get("ok")),
+            "ms": round((time.perf_counter() - started) * 1000, 1),
+        }
+
+
+def make_handler(service: TaggingService, token: str = ""):
+    return type("Handler", (_Handler,), {"service": service, "token": token})
+
+
+def _warn_if_firewalled(host: str, port: int, ips: list[str]) -> None:
+    """Say something if Windows is likely to drop the phone's packets.
+
+    Loopback answers regardless, so a firewall that blocks the LAN looks
+    exactly like a working server from the PC.  Worth one netsh query.
+    """
+    if host in ("127.0.0.1", "localhost", "::1") or not ips:
+        return
+    try:
+        from .firewall import preflight
+    except Exception as exc:  # noqa: BLE001
+        log.debug("firewall check unavailable: %s", exc)
+        return
+    verdict, message = preflight(port)
+    if verdict is False:
+        log.warning("the phone may not be able to reach this server:\n  %s", message)
+    elif verdict is None:
+        log.debug("firewall check skipped: %s", message)
+
+
+def serve(
+    config: Config,
+    *,
+    host: str = "0.0.0.0",
+    port: int = 8899,
+    token: str = "",
+    warmup: bool = True,
+) -> None:
+    service = TaggingService(config, warmup=warmup)
+    httpd = ThreadingHTTPServer((host, port), make_handler(service, token))
+    httpd.daemon_threads = True
+
+    ips = _lan_ips()
+    log.info("albumcat serve listening on %s:%d", host, port)
+    for ip in ips:
+        log.info("  phone should use  http://%s:%d", ip, port)
+    if not token:
+        log.warning("no token set - anyone on this LAN can use the model (--token to lock it)")
+    _warn_if_firewalled(host, port, ips)
+    log.info("model: %s", (service.tagger.describe() if service.tagger else "none"))
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        log.info("stopping")
+    finally:
+        httpd.server_close()

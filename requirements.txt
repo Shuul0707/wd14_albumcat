@@ -1,0 +1,14 @@
+# albumcat runtime dependencies.
+#
+# The GPU backend depends on the machine:
+#   Windows / any DX12 GPU  -> onnxruntime-directml   (what we use)
+#   NVIDIA + CUDA 12.x      -> onnxruntime-gpu
+#   no GPU / fallback       -> onnxruntime
+# Only ONE onnxruntime variant may be installed at a time; they all provide the
+# same `onnxruntime` module name.
+onnxruntime-directml>=1.20; sys_platform == "win32"
+numpy>=1.26
+pillow>=10.0
+pandas>=2.0
+opencv-python-headless>=4.8
+requests>=2.31

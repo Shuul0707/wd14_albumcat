@@ -1,0 +1,59 @@
+# virtualenv / python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# scratch dirs (sandbox TEMP, pip cache)
+.tmp/
+.pipcache/
+
+# downloaded model weights (~356 MB) -- re-fetch with tools/download_model.py
+models/
+
+# user photos used for testing -- never commit these
+samples/
+
+# runtime state (journal, caches) -- added later
+data/
+
+# Immich deployment: .env holds the generated DB password, the rest is a
+# whole photo library + postgres data directory
+immich/.env
+immich/library/
+immich/postgres/
+
+# build outputs: APKs from android/ and from the Aves fork are build
+# artifacts, not sources -- publish them as GitHub Release assets instead
+build/
+dist/*.apk
+*.apk
+*.aab
+
+# course slide deck: its docProps carry a real author name and every slide
+# names the speakers. Scrub those before publishing it here.
+dist/*.pptx
+
+# signing material, if you ever add it
+*.keystore
+*.jks
+
+# local Android toolchain state
+android/build/
+android/app/build/
+android/.gradle/
+android/.kotlin/
+android/local.properties
+
+# third-party reference clone only: it carries its own .git and is not needed
+# at runtime (src/albumcat/tagger.py talks to onnxruntime directly).
+# Re-clone it per README「安装」instead of committing it here.
+third_party/
+
+# editor / OS noise
+.idea/
+*.iml
+.vscode/
+*.log
+Thumbs.db
+Desktop.ini

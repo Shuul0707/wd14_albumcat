@@ -1,0 +1,11 @@
+{
+  "id": "example-flat-image",
+  "kind": "python",
+  "version": "0.1.0",
+  "name": "Flat image detector",
+  "description": "Flags images that are essentially one flat colour -- failed downloads, black frames, placeholder art -- so they are easy to purge.",
+  "author": "albumcat",
+  "target": "tag",
+  "priority": 50,
+  "threshold": 0.5
+}

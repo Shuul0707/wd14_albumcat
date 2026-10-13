@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NoActionBar is load bearing, not cosmetic.
+
+  This app used to run on @android:style/Theme.Material.Light, which carries a
+  framework ActionBar. From targetSdk 35 on, the window is edge to edge whether
+  the app asks for it or not, and an old framework ActionBar does not take
+  layout space in that mode: it is drawn *over* the content. The bar then
+  covered the title row, the hint row and most of the address box, leaving the
+  token box as the first field a user could see. The address went into it, the
+  address box stayed empty, and the app reported "you have not filled in the PC
+  address" while the screen plainly showed an address. Photographs of the phone
+  are in the README; the emulator reproduces it.
+
+  With no ActionBar there is nothing to overlap, and the inset listener in
+  MainActivity.buildUi() keeps the content clear of the status bar.
+-->
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>
