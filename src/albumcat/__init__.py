@@ -1,23 +1,22 @@
-"""albumcat -- tag a photo library with WD14 anime tags, on-device or in Immich.
+"""albumcat -- tag a photo library with WD14 anime tags, on the phone.
 
 The pipeline is deliberately split into small, swappable stages:
 
-    scan  ->  inference  ->  plugins  ->  rules  ->  publish
+    scan  ->  inference  ->  plugins  ->  rules  ->  tag fields
 
 * ``tagger``     runs the WD14 ONNX model (BGR, 448x448, no normalisation).
 * ``plugins``    lets you bolt extra recognisers on -- most importantly a
-                768-d ONNX classification head trained on your own
-                corrections, which is how you get *precise* character
-                recognition for a specific franchise.  (768 is the ViT-B/16
-                global-average-pooled feature width; the upstream README's
-                "1024" is wrong.)
-* ``rules``      turns raw scores into publishing decisions (which album /
-                tag, review band, rating isolation).
-* ``publishers`` writes the result somewhere -- Immich tags, or the photo's own
-                XMP for route A (``JpegXmpSink``), or a JSON dump for testing,
-                without touching the earlier stages.
-* ``server``     exposes the pipeline over the LAN so the Android app can post
-                a 448px thumbnail and get back a finished tag set.
+                 768-d ONNX classification head trained on your own
+                 corrections, which is how you get *precise* character
+                 recognition for a specific franchise.  (768 is the ViT-B/16
+                 global-average-pooled feature width; the upstream README's
+                 "1024" is wrong.)
+* ``rules``      turns raw scores into tag decisions (which root, review band,
+                 rating isolation).
+* ``tagfields``  flattens a plan into the two tag lists the phone stores --
+                 the flat table and the hierarchical paths.
+* ``server``     exposes the pipeline over the LAN so the phone app can post
+                 a 448px thumbnail and get back a finished tag set.
 
 Quick start::
 
@@ -41,8 +40,6 @@ __version__ = "0.1.0"
 _EXPORTS = {
     # config / io
     "Config": "config",
-    "ImmichClient": "immich",
-    "ImmichError": "immich",
     # inference
     "Wd14Tagger": "tagger",
     "TagTable": "tagger",
@@ -66,14 +63,10 @@ _EXPORTS = {
     # plugins
     "PluginRegistry": "plugins",
     "PluginManifest": "plugins",
-    # publishing
+    # pipeline
     "Pipeline": "pipeline",
-    "ImmichPublisher": "publishers",
-    "JpegXmpSink": "publishers",
-    "JsonPublisher": "publishers",
-    "Journal": "publishers",
-    "PublishReport": "publishers",
-    "plan_to_xmp_fields": "publishers",
+    # tag fields
+    "plan_to_tag_fields": "tagfields",
 }
 
 __all__ = ["__version__", *sorted(_EXPORTS)]

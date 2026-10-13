@@ -74,7 +74,7 @@ class Action:
     ``kind``:
       ``tag``   -- emit ``path`` (templated) as a tag
       ``drop``  -- suppress the prediction from the default policy
-      ``star``  -- set the Immich star rating to ``value``
+      ``star``  -- set the star rating (0-5) to ``value``
       ``review``-- mark the plan as needing human review
     """
 

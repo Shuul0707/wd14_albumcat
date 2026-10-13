@@ -2,7 +2,7 @@
 """Tag images with WD14 and print what the model actually sees.
 
 This is the "does it even recognise my characters" smoke test. It needs no
-server, no Immich and no phone -- just the ONNX files and some pictures.
+server and no phone -- just the ONNX files and some pictures.
 
 Usage::
 

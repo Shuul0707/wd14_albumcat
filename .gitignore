@@ -17,14 +17,8 @@ samples/
 # runtime state (journal, caches) -- added later
 data/
 
-# Immich deployment: .env holds the generated DB password, the rest is a
-# whole photo library + postgres data directory
-immich/.env
-immich/library/
-immich/postgres/
-
-# build outputs: APKs from android/ and from the Aves fork are build
-# artifacts, not sources -- publish them as GitHub Release assets instead
+# build outputs: the Aves fork's APK is a build artifact, not a source --
+# publish it as a GitHub Release asset instead
 build/
 dist/*.apk
 *.apk
@@ -37,13 +31,6 @@ dist/*.pptx
 # signing material, if you ever add it
 *.keystore
 *.jks
-
-# local Android toolchain state
-android/build/
-android/app/build/
-android/.gradle/
-android/.kotlin/
-android/local.properties
 
 # third-party reference clone only: it carries its own .git and is not needed
 # at runtime (src/albumcat/tagger.py talks to onnxruntime directly).

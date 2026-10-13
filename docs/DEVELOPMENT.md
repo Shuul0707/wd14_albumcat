@@ -68,8 +68,6 @@ UI 级证据（截图在 `docs\evidence\`）：
 
 ## 项目结构
 
-目录里还有两条已舍弃路线留下的文件（写 XMP、写 Immich，以及那个旧的 Kotlin SAF App）：它们仍在仓库里，但不再维护；目录树里标了「（已舍弃）」的就是它们，始末见 [LEGACY](LEGACY.md)。
-
 ```
 albumcat/
 ├─ config.toml                  配置（见文件内注释）
@@ -78,51 +76,26 @@ albumcat/
 │  ├─ tagger.py                 WD14 ONNX 推理（照抄上游预处理契约）
 │  ├─ rules.py                  规则引擎：分数 → 发布决策
 │  ├─ plugins.py                插件注册表与五种 Recognizer
-│  ├─ xmp.py                    JPEG/PNG 内部 XMP 的读写（XMP 路线的核心）（已舍弃）
-│  ├─ publishers.py             JpegXmpSink + ImmichPublisher + 操作日志（可撤销）（已舍弃）
 │  ├─ server.py                 给手机用的局域网打标服务（纯标准库 HTTP）
 │  ├─ firewall.py               启动/自检时看 Windows 会不会把手机的包丢掉
-│  ├─ immich.py                 Immich REST 客户端（已舍弃）
 │  ├─ pipeline.py               串起 扫描→推理→插件→规则
 │  ├─ types.py                  Prediction / TagSet / TagPlan
 │  ├─ config.py                 配置加载
 │  └─ cli.py                    命令行
-├─ android/                     旧的 Kotlin SAF App（已舍弃）；当前做法是下面的 Aves fork
-│  └─ app/src/main/
-│     ├─ res/values/themes.xml   无 ActionBar 的主题（框架 ActionBar 会画在表单之上，见「技术要点」）
-│     ├─ res/values-v35/themes.xml  同上 + 退出 edge-to-edge（保险，API 36 起被忽略）
-│     └─ java/com/albumcat/
-│        ├─ MainActivity.kt      单屏 UI（含系统栏内边距与构建戳）
-│        ├─ TagRunner.kt         扫相册 → 打标 → 写回 → 撤销
-│        ├─ TaggerClient.kt      调电脑端 /plan
-│        ├─ NetDiagnosis.kt      把连接失败翻译成「接下来该干什么」（不带任何 Android 依赖，可在桌面 JVM 上测）
-│        ├─ ServerAddress.kt     地址归一化 + looksLikeAddress()（把误填进令牌栏的地址救回来）（同样不带 Android 依赖）
-│        ├─ Thumbnailer.kt       缩到 448px、烘焙 EXIF 方向
-│        ├─ Xmp.kt               与 xmp.py 同构的 XMP 读写（已舍弃）
-│        ├─ DocumentPaths.kt     SAF 文档 id → 文件路径（只依赖 JDK，可离线测）
-│        ├─ Rescan.kt            写完告诉系统媒体库「这张图变了」，相册才知道要重读
-│        └─ Journal.kt           手机上记录「原包 → 新包」，用于撤销
 ├─ tools/
 │  ├─ download_model.py         模型下载（纯标准库，可续传）
 │  ├─ add_feature_output.py     给模型加特征输出（替代上游 1.2GB 拆分模型）
 │  ├─ check_feature_plugin.py   feature 插件链路自检
 │  ├─ setup_android.py          下载 Android SDK（绕开坏掉的 Windows TLS）
 │  ├─ make_aves_probe.py        生成「哨兵标签」探针图（3 张 JPEG + 1 张 PNG），验证 Aves 读不读 XMP
-│  ├─ check_kotlin_xmp.py       把 App 的 Xmp.kt 拿到桌面 JVM 上跑，和 xmp.py 逐字节对拍（JPEG + PNG）（已舍弃）
-│  ├─ simulate_phone.py         在电脑上彩排 App 整条链路（只差 SAF）（已舍弃）
-│  ├─ check_android_client.py   把 App 真实的 TaggerClient.kt / Journal.kt 拿到桌面 JVM 上跑（已舍弃）
-│  ├─ check_android_runner.py   把 App 真实的 TagRunner.kt 拿到桌面 JVM 上，用假相册跑完整流程（已舍弃）
-│  ├─ smoke_device.py           在真机/模拟器上无人值守跑完整轮（需要设备，故不在 check_all 里）（已舍弃）
 │  ├─ aves_build.ps1            构建 Aves fork 的 APK（-Platform android-x64 / android-arm64）
 │  ├─ verify_aves_tags.py       Aves fork 端到端验证：探针文件哈希/时间戳不变 + appTags 逐文件断言
 │  ├─ phone_link.cmd            没有局域网时用数据线：adb reverse 把手机的 127.0.0.1:8899 接到电脑
-│  ├─ kotlin_jvm.py             编译并驱动 Kotlin 源码的公共管道（上述 check_* 四个脚本共用）
 │  ├─ check_all.cmd             一条命令跑全部自检（纯 ASCII 薄壳）
 │  ├─ check_all.py              自检清单本体，从便宜到贵排序
 │  ├─ install_deps.cmd          依赖安装（建 venv + 清华源）
 │  ├─ allow_firewall.cmd        一键允许 8899 入站（会弹 UAC）
 │  ├─ albumcat.cmd              PC 端命令入口
-│  ├─ android_build.cmd         用缓存里的 Gradle 构建 App
 │  └─ probe_*.py                环境/接口探测脚本
 ├─ plugins/                     插件目录（见 plugins/README.md）
 ├─ models/vit/                  model.onnx + model_features.onnx + selected_tags.csv

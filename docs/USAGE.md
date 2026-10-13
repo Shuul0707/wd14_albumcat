@@ -1,6 +1,6 @@
 # 安装与用法
 
-> 装依赖、下模型、配置、自检和标签格式。已经舍弃的另外两条投放路线（写 XMP / 写 Immich）见 [LEGACY](LEGACY.md)。
+> 装依赖、下模型、配置、自检和标签格式。
 
 > 本文是 [README](../README.md) 的延伸阅读，可以直接跳读。
 
@@ -38,8 +38,6 @@ tools\install_deps.cmd
 写错键名会直接报错。手机那条路线上真正要看的是 `[publish]` 里的几个词根（`角色` / `作品` /
 `分级`）和 `tree_in_subject = true`——App 把扁平标签名原样存下来，关掉它角色就只剩裸名、没法筛。
 
-`[immich]` 那一整段（`base_url` / `api_key`）和 `dry_run` 都只跟已舍弃的两条路线有关，见 [LEGACY](LEGACY.md)。
-
 ### 4. 自检
 
 ```bat
@@ -50,7 +48,7 @@ tools\albumcat.cmd doctor
 
 ## 使用
 
-手机上那条路线的用法见 [PHONE](PHONE.md)。已经舍弃的两条——`albumcat tag` 写 XMP、`albumcat run` 写 Immich——见 [LEGACY](LEGACY.md)。
+手机上那条路线的用法见 [PHONE](PHONE.md)。
 
 ### 只看不动
 

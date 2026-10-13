@@ -146,7 +146,7 @@ main rules file.
 
 * `{"kind": "tag", "path": ["角色", "初音未来"]}` — publish a hierarchical tag
 * `{"kind": "drop"}` — discard the matched prediction
-* `{"kind": "star", "value": 5}` — set the Immich star rating
+* `{"kind": "star", "value": 5}` — set the star rating (0–5)
 * `{"kind": "review"}` — flag the image for human review
 
 `priority` is lower-first. Rules in `rules.json` default to 10, which puts them

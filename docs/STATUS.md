@@ -6,8 +6,6 @@
 
 ## 当前状态
 
-已舍弃的两条路线（写 XMP / 写 Immich）的验证结论不在这里，见 [LEGACY](LEGACY.md)。
-
 | 部分 | 状态 |
 |---|---|
 | **Aves fork：标签只进相册 App 自己的库** | ✅ **端到端跑通**（`tools\verify_aves_tags.py` 11/11：4/4 探针文件的 SHA256 与 mtime 都不变、数据库 `user_version=17`、appTags 逐文件对得上——每个文件恰好一个 `角色\|X` 标签；提速版 APK 重装后又跑过一遍，仍 11/11） |
@@ -30,7 +28,7 @@
 
 - **fork 的标签只属于 Aves**。标签在 Aves 自己的数据库（`appTags` 表）里，
   所以电脑上的 Lightroom、手机上的别的相册 App 都看不到；卸载 Aves 或清它的数据，标签就一起没了，
-  换手机也不会跟着走。想「标签随照片走」只能回到 XMP 路线（已舍弃，见 [LEGACY](LEGACY.md)）——那条路是通的，代价是照片的修改时间会变。
+  换手机也不会跟着走。
 - **fork 基于上游 Aves 1.15.5**，改动落在 **27 个已有文件 + 5 个新文件**上（数据模型见上表，
   其余是 5 个回写调用点、设置、服务、打标页，以及 Kotlin 侧为「质量换体积」和「自己解图」新开的
   `jpegQuality` 参数与 `getByDecoding()`——`BitmapUtils.kt` + `DebugHandler.kt` + `ThumbnailFetcher.kt`；
@@ -45,7 +43,6 @@
 - **只处理 JPEG 和 PNG，不处理 HEIC**。这两种是刻意选的：安卓**截屏就是 PNG**，
   而截屏恰恰是最值得按角色分类的那批图；JPEG 是相机默认。
   `.heic` / `.webp` 会被跳过并在报告里记一条错误，而不是让你看到一个说不出所以然的「找到 12 张」。
-  当初为什么没做 HEIC（以及那时的 App 是怎么报跳过张数的）见 [LEGACY](LEGACY.md)。
 - **Aves 的字段选择和索引行为都已验过，但只在模拟器上验过**。字段是读源码定的：它只从
   `dc:subject` 建标签，我们也照这个写了（`publish.tree_in_subject`）。索引行为是在安卓 15
   模拟器装 Aves 后拉它的 `metadata.db` 确认的（见 [PHONE](PHONE.md) 的「Aves 那一端，在设备上也是验过的」）。

@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, TypeVar
 
-__all__ = ["Config", "ModelConfig", "ImmichConfig", "PublishConfig", "PluginConfig"]
+__all__ = ["Config", "ModelConfig", "PublishConfig", "PluginConfig"]
 
 T = TypeVar("T")
 
@@ -58,18 +58,8 @@ class ModelConfig:
 
 
 @dataclass
-class ImmichConfig:
-    base_url: str = "http://127.0.0.1:2283"
-    api_key: str = ""
-    verify_tls: bool = True
-    timeout: float = 60.0
-    download_concurrency: int = 4
-    """How many originals to pull at once when tagging a library."""
-
-
-@dataclass
 class PublishConfig:
-    """How predictions become Immich tags."""
+    """How predictions become the tag set the phone stores."""
 
     character_root: str = "角色"
     """Parent tag for ``角色/<name>``. Empty string = flat tags."""
@@ -83,7 +73,7 @@ class PublishConfig:
 
     rating_threshold: float = 0.5
     write_star_rating: bool = False
-    """Also write Immich's 1-5 star rating from WD14's 4-way rating."""
+    """Also return a 1-5 star rating derived from WD14's 4-way rating."""
 
     review_low: float = 0.5
     review_high: float = 0.7
@@ -101,32 +91,27 @@ class PublishConfig:
     """Tags never published (e.g. ``"1girl"`` if you find it noise)."""
 
     general_tags_in_tree: bool = False
-    """Route A only: put general tags in the gallery's tag *tree* too.
+    """Put general tags in the hierarchical list too.
 
-    The XMP tree (``lr:HierarchicalSubject`` / ``digiKam:TagsList``) is what a
-    gallery groups by, so by default it carries only ``角色`` / ``作品`` /
-    ``分级`` -- otherwise twenty-odd booru tags per photo bury the character
-    tags. General tags still go into the flat ``dc:subject`` bag either way, so
-    they stay searchable.
+    ``hierarchical`` is the level-separated view a gallery groups by, so by
+    default it carries only ``角色`` / ``作品`` / ``分级`` -- otherwise
+    twenty-odd booru tags per photo bury the character tags. General tags
+    still go into the flat list either way, so they stay searchable.
     """
 
     tree_in_subject: bool = True
-    """Route A only: list the tree paths in flat ``dc:subject`` as well.
+    """Also list the hierarchical paths in the flat tag list.
 
-    Aves builds an entry's tags from XMP ``dc:subject`` and nothing else -- its
-    native reader looks up ``XMP.DC_SUBJECT_PROP_NAME``, splits on ``;`` and
-    stops there. It never reads ``lr:HierarchicalSubject`` or
-    ``digiKam:TagsList``. So a tree that lives only in those two fields is
+    The phone builds an entry's tags from the flat list and nothing else: it
+    splits that one list on the separator and re-parses the paths, and never
+    reads ``hierarchical``. So a tree that lives only in ``hierarchical`` is
     invisible on the phone: the Tags page would show "Kasane Teto" but no
     ``角色|Kasane Teto`` to tap.
 
-    Costs a few extra keywords per photo and makes the character tags usable in
-    Aves. Turn it off if you only ever browse in digiKam/Lightroom, where the
-    duplicate entries are just noise.
+    Costs a few extra entries per photo and makes the character tags usable in
+    Aves. Turn it off if you only ever browse somewhere that reads the
+    hierarchical list directly, where the duplicate entries are just noise.
     """
-
-    dry_run: bool = True
-    """Safety default: plan but do not touch Immich until explicitly turned off."""
 
 
 @dataclass
@@ -147,7 +132,6 @@ class PluginConfig:
 @dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
-    immich: ImmichConfig = field(default_factory=ImmichConfig)
     publish: PublishConfig = field(default_factory=PublishConfig)
     plugins: PluginConfig = field(default_factory=PluginConfig)
     root: Path = PROJECT_ROOT
@@ -173,7 +157,6 @@ class Config:
 
         cfg = cls(
             model=_fill(ModelConfig, raw.get("model")),
-            immich=_fill(ImmichConfig, raw.get("immich")),
             publish=_fill(PublishConfig, raw.get("publish")),
             plugins=_fill(PluginConfig, raw.get("plugins")),
         )
@@ -185,7 +168,7 @@ class Config:
     def apply_env(self, env: dict[str, str] | None = None) -> "Config":
         """Overlay ``ALBUMCAT_<SECTION>_<FIELD>`` environment variables."""
         env = os.environ if env is None else env
-        for section_name in ("model", "immich", "publish", "plugins"):
+        for section_name in ("model", "publish", "plugins"):
             section = getattr(self, section_name)
             for f in fields(section):
                 key = f"ALBUMCAT_{section_name.upper()}_{f.name.upper()}"
@@ -196,7 +179,7 @@ class Config:
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
-        for section_name in ("model", "immich", "publish", "plugins"):
+        for section_name in ("model", "publish", "plugins"):
             out[section_name] = asdict(getattr(self, section_name))
         return out
 

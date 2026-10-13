@@ -20,7 +20,7 @@ prediction lands in for the rules engine:
 The item you are handed carries:
 
     item.path        local path of the cached image (for reference only)
-    item.asset_id    Immich asset id, empty when tagging local files
+    item.asset_id    photo id from the phone, empty when tagging local files
     item.image       PIL.Image -- what WD14 actually saw (already squared
                      off at 448x448, so aspect ratio is NOT original)
     item.embedding   the split model's 1024-d vector, or None

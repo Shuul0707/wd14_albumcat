@@ -24,8 +24,10 @@ Usage
     python tools\\check_plan_batch.py    # in another (defaults to 127.0.0.1:8899)
     python tools\\check_plan_batch.py http://10.0.0.5:8899
 
-It needs the probe images, so run `python tools\\make_aves_probe.py` once first.
-This is not part of check_all.cmd: it requires a live server and a GPU tagger.
+It needs a live server and the probe images. Run `tools\\albumcat.cmd serve` in
+one terminal and `python tools\\make_aves_probe.py` once, then this. It does not
+need a phone or an emulator -- it is plain HTTP from this PC. `tools\\check_all.py`
+starts its own server and generates the probes, so it needs neither.
 """
 
 from __future__ import annotations

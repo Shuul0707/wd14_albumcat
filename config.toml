@@ -5,7 +5,7 @@
 # Unknown keys are an error (so typos are caught instead of silently ignored).
 #
 # Environment variables override this file:  ALBUMCAT_<SECTION>_<FIELD>
-# e.g. ALBUMCAT_IMMICH_API_KEY=abc, ALBUMCAT_PUBLISH_DRY_RUN=false
+# e.g. ALBUMCAT_MODEL_DEVICE=cpu, ALBUMCAT_MODEL_THRESHOLD=0.4
 
 [model]
 # Directory holding model.onnx + selected_tags.csv.
@@ -35,24 +35,6 @@ batch_size = 8
 # a browser). 4 GB is a safe ceiling on an 8 GB card.
 gpu_mem_limit_mb = 4096
 
-# Retired route: writing tags into a self-hosted Immich library. The code and
-# `albumcat run` are still in the repo, but they are no longer maintained.
-# See docs/LEGACY.md.
-[immich]
-base_url = "http://127.0.0.1:2283"
-
-# Create one in Immich: Account Settings -> API Keys.
-# Keep this file out of version control once you fill it in, or set
-# ALBUMCAT_IMMICH_API_KEY in the environment instead.
-api_key = ""
-
-# Set to false only for a self-signed certificate.
-verify_tls = true
-timeout = 60.0
-
-# Parallel thumbnail downloads while scanning the library.
-download_concurrency = 4
-
 [publish]
 # How tag names are built. A character called "Hatsune Miku" becomes
 #   角色|Hatsune Miku
@@ -69,8 +51,8 @@ rating_enabled = true
 # Minimum score before a rating tag is applied at all.
 rating_threshold = 0.5
 
-# Also emit a 1-5 star rating in the plan result. The Aves route does not use
-# it (the retired XMP / Immich routes did), so leave this off.
+# Also emit a 1-5 star rating in the plan result. Nothing on the phone path
+# reads it, so leave this off.
 write_star_rating = false
 
 # The review band. A character scoring between review_low and review_high is
@@ -104,11 +86,6 @@ general_tags_in_tree = false
 # only have the bare name "Hatsune Miku" and nothing to filter a character by.
 # Leave it on.
 tree_in_subject = true
-
-# Safety catch for the retired write-out routes: `albumcat tag` and
-# `albumcat run` do nothing unless you pass --apply. Set this to false to make
-# writing the default. The Aves route ignores this key.
-dry_run = true
 
 [plugins]
 # Enable the plugin registry. See src/albumcat/plugins.py for the format.

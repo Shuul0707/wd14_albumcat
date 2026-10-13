@@ -1,30 +1,28 @@
-"""The pipeline: image -> tags -> plan -> publisher.
+"""The pipeline: image -> tags -> plan.
 
-This is the piece both routes (A: phone/XMP, B: Immich) share. Everything
-upstream of :class:`~albumcat.publishers.Publisher` is source- and
-destination-agnostic -- given a decoded image it produces a
-:class:`~albumcat.types.TagPlan`, and a publisher decides what that means.
+Given a decoded image this produces a :class:`~albumcat.types.TagPlan` -- the
+finite, policy-applied answer that the phone turns into its own tag entries.
+Everything here is source- and destination-agnostic.
 
     Wd14Tagger  ->  TagSet  ->  plugins  ->  TagSet  ->  RuleEngine  ->  TagPlan
       (448px)        (wd14)     (adds)       (merged)      (policy)
 
 Two entry points are provided: :meth:`Pipeline.plan_paths` for a local folder
 (useful for the first "does WD14 even recognise my characters" test) and
-:meth:`Pipeline.plan_immich` for a real library.
+:meth:`Pipeline.plan_image` for one already-decoded image, which is what the
+HTTP service calls.
 """
 
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Iterator
 
 from PIL import Image
 
 from .config import Config
-from .immich import ImmichClient, ImmichError
 from .plugins import ImageItem, PluginRegistry
 from .rules import RuleEngine
 from .tagger import (
@@ -211,54 +209,3 @@ class Pipeline:
                 log.warning("failed on %s: %s", file, exc)
                 continue
             yield file, plan, tagset
-
-    # ------------------------------------------------------------------ #
-    def plan_immich(
-        self,
-        asset_ids: Sequence[str] | None = None,
-        *,
-        tag_ids: Sequence[str] | None = None,
-        limit: int | None = None,
-        cache_dir: Path | str | None = None,
-        concurrency: int = 4,
-        preview_size: str = "preview",
-    ) -> Iterator[tuple[str, TagPlan, TagSet]]:
-        """Tag assets held in Immich.
-
-        Fetches each asset's *preview* thumbnail rather than the original --
-        WD14 sees 448x448 anyway, so pulling 3-8 MB originals over the network
-        would be pure waste.
-        """
-        client = ImmichClient(
-            self.config.immich.base_url,
-            self.config.immich.api_key,
-            timeout=self.config.immich.timeout,
-            verify_tls=self.config.immich.verify_tls,
-        )
-        cache = Path(cache_dir) if cache_dir else (self.config.root / "data" / "preview_cache")
-        cache.mkdir(parents=True, exist_ok=True)
-
-        if asset_ids is None:
-            asset_ids = [
-                asset["id"] for asset in client.iter_assets(tag_ids=tag_ids)
-            ]
-        if limit is not None:
-            asset_ids = list(asset_ids)[:limit]
-
-        with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-            futures = {
-                pool.submit(client.download_thumbnail, aid, cache, preview_size): aid
-                for aid in asset_ids
-            }
-            for future in as_completed(futures):
-                asset_id = futures[future]
-                try:
-                    local = future.result()
-                    with Image.open(local) as image:
-                        plan, tagset = self.plan_image(
-                            image, asset_id=asset_id, path=str(local)
-                        )
-                except (ImmichError, OSError, ValueError) as exc:
-                    log.warning("failed on asset %s: %s", asset_id, exc)
-                    continue
-                yield asset_id, plan, tagset

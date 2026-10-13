@@ -6,6 +6,10 @@
 ![python](https://img.shields.io/badge/python-3.11%2B-3776ab)
 ![model](https://img.shields.io/badge/model-WD14%20vit--tagger--v2-ff69b4)
 ![app](https://img.shields.io/badge/相册-Aves%20fork-1f6feb)
+[![release](https://img.shields.io/github/v/release/Shuul0707/wd14_albumcat?label=release)](https://github.com/Shuul0707/wd14_albumcat/releases)
+
+> 手机端 APK 在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)：真机用 arm64，模拟器用 x64。
+> 电脑端按下面[快速开始](#快速开始)跑起来，两边连同一个 Wi-Fi 就能开始打标签。
 
 手机里攒了几千张同人图和截图，想按角色翻，系统相册却只能按时间。albumcat 把
 [WD14 tagger](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2)（9083 个标签，其中 2132 个角色名）
@@ -46,7 +50,7 @@
 ```
 
 标签落在 Aves 自己的 `appTags` 表里，和照片自带的标签并集显示，所以 Tags 页和筛选直接就能用。
-fork 具体改了哪些地方见 [设计说明](docs/DESIGN.md)。
+fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都写在里面。
 
 ## 快速开始
 
@@ -70,7 +74,8 @@ tools\albumcat.cmd plan samples\
 
 ### 2. 手机端
 
-1. 在 Aves（fork 版，见 [开发与验证](docs/DEVELOPMENT.md#构建)）里授权照片访问；
+1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（真机 arm64、模拟器 x64），
+   或者按 [aves/FORK.md](aves/FORK.md) 自己构建；装好授权照片访问；
 2. 右上角 ✨ → **AI 打标签** → 填电脑地址 `http://192.168.1.10:8899` → **开始打标签**；
 3. 打完到 **Tags** 页，`角色|…` 会出现在那里。
 
@@ -143,30 +148,34 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 
 ```text
 src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / HTTP 服务 / 命令行
-tools/               命令行入口与验证脚本（albumcat.cmd、download_model.py、verify_aves_tags.py …）
+aves/                手机端：Aves 的 fork 源码（标签存进它自己的 appTags 表）
+tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
 plugins/             插件目录（示例 + 训练产物）
 docs/                延伸阅读与 UI 证据截图
 config.toml          全部配置项，注释齐全
 ```
 
-完整目录树、fork 的改动清单、构建与验证脚本见 [开发与验证](docs/DEVELOPMENT.md)。
+完整目录树与验证脚本见 [开发与验证](docs/DEVELOPMENT.md)，fork 的构建方式见 [aves/FORK.md](aves/FORK.md)。
+构建产物（APK）不进仓库，放在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [设计说明](docs/DESIGN.md) | 标签存在哪、fork 改动清单、管线技术要点 |
+| [设计说明](docs/DESIGN.md) | 标签存在哪、管线技术要点 |
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
-| [开发与验证](docs/DEVELOPMENT.md) | 构建 Aves fork、验证脚本、目录树 |
+| [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
+| [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建 |
 
 ## 已知限制
 
 - 打标时**电脑必须开着**：模型和 onnxruntime 都在电脑上。
 - 抗中断覆盖「电脑端消失 / 连接断」；App 进程被系统直接杀掉时，正在飞的那批仍会丢。
 - 标签只存在于 Aves（fork 版）自己的数据库里，换个相册 App 就看不到。
-- **fork 的源码和 APK 都不在这个仓库里**：要自己按 [开发与验证](docs/DEVELOPMENT.md#构建) 构建一份。
+- **第一次构建要装 JDK 21 + Flutter 3.47.6**：`aves/` 里是完整源码，按 [FORK.md](aves/FORK.md) 来；
+  只是想用就直接下 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 里的 APK（debug 签名，随便装）。
 - 自动打出来的标签是**建议**：角色阈值故意定得高，宁可漏报。
 - 分级标签来自 WD14 的 rating head，内容合规由使用者自己负责。
 
@@ -175,4 +184,5 @@ config.toml          全部配置项，注释齐全
 本仓库尚未选定许可证（补齐前请先开 issue 问一声）。使用的上游组件各有自己的条款：
 [wd14-API-onnx](https://github.com/bilebee/wd14-API-onnx)（MIT，用于核对预处理）、
 模型 [`wd-v1-4-vit-tagger-v2`](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2)（以模型页条款为准）、
-以及 fork 自 [Aves](https://github.com/deckerst/aves)（GPL-3.0）的手机端。
+以及手机端：[Aves](https://github.com/deckerst/aves) 的 fork（**BSD 3-Clause**，源码在 [aves/](aves/FORK.md)，
+版权与许可证原文见 `aves/LICENSE`）。

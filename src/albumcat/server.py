@@ -1,12 +1,15 @@
-"""The tagging service the phone talks to (route A, PC side).
+"""The tagging service the phone talks to (PC side).
 
-Route A splits the work in two:
+The work is split in two:
 
     phone  : walk its own gallery, build a 448px thumbnail per photo
     PC     : ID the thumbnail, apply the rules, hand back the *finished* tag set
-    phone  : splice that tag set into the photo's own XMP
+    phone  : store that tag set in the gallery app's own tag table
 
-The PC deliberately returns a finished answer -- flat keywords, hierarchical
+The photo file itself is never rewritten -- the tags live in the gallery app's
+database, so the pixels and the file's metadata are untouched by design.
+
+The PC deliberately returns a finished answer -- flat tags, hierarchical
 paths, star rating -- rather than raw WD14 scores. That way the rules, the
 thresholds, the plugin registry and the denylist all live in one place and the
 phone stays a dumb applier. Changing a threshold here changes behaviour on the
@@ -50,7 +53,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import Config
 from .pipeline import Pipeline, load_tagger
-from .publishers import plan_to_xmp_fields
+from .tagfields import plan_to_tag_fields
 
 __all__ = ["TaggingService", "serve"]
 
@@ -184,7 +187,7 @@ class TaggingService:
         with self._lock:
             plan, tagset = self.pipeline.plan_image(image, asset_id=asset_id, path=name)
 
-        flat, hierarchical = plan_to_xmp_fields(plan, self.config.publish)
+        flat, hierarchical = plan_to_tag_fields(plan, self.config.publish)
         star = plan.star_rating if self.config.publish.write_star_rating else None
 
         payload = {
@@ -194,7 +197,7 @@ class TaggingService:
             "name": name,
             "size": size,
             "date_taken": date_taken,
-            # exactly what belongs in the photo's XMP
+            # exactly the tag list the phone stores
             "flat": flat,
             "hierarchical": hierarchical,
             "rating": star or 0,
