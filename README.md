@@ -1,23 +1,20 @@
 # albumcat
 
-**用 WD14 给手机相册自动打动漫角色标签，在第三方相册里按 `角色` 浏览 —— 照片文件一个字节都不动。**
+**用 WD14 给手机相册自动打动漫角色标签，在第三方相册里按 `角色` 浏览。**
 
 ![platform](https://img.shields.io/badge/手机端-Android-3ddc84)
 ![python](https://img.shields.io/badge/python-3.11%2B-3776ab)
 ![model](https://img.shields.io/badge/model-WD14%20vit--tagger--v2-ff69b4)
-![photos](https://img.shields.io/badge/照片文件-不移动%20·%20不改写-success)
+![app](https://img.shields.io/badge/相册-Aves%20fork-1f6feb)
 
 手机里攒了几千张同人图和截图，想按角色翻，系统相册却只能按时间。albumcat 把
 [WD14 tagger](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2)（9083 个标签，其中 2132 个角色名）
-接到你的相册上：**手机只把 448 px 缩略图发给电脑做推理**，标签回来存进相册 App（Aves）*自己的数据库*。
-原图的 SHA256 与修改时间逐字节不变，所以时间线、排序、任何别的 App 都看不出这张照片被碰过。
+接到你的相册上：手机只把 448 px 缩略图发给电脑做推理，标签回来存进 Aves 自己的数据库。
 
-- **照片不改** —— 不移动、不改名、不重编码、**不写 XMP**。这是最初就定下的硬约束：改写元数据会重置文件修改时间，相册立刻按新时间重排。
-- **电脑只做推理** —— 356 MB 的模型留在电脑上，手机不装 ONNX 运行时、不联网上传原图。
+- **手机端很轻** —— 356 MB 的模型和 ONNX 运行时都留在电脑上，手机上只有取缩略图这一个动作。
 - **层级标签** —— `角色|Shameimaru Aya`、`作品|Touhou Project`、`分级|R18`，点一下筛出某个角色的全部图片。
 - **可插插件** —— 在 WD14 之后接自己的模型，比如对某个 IP 的角色做精准识别。
 - **抗中断** —— 一批一落盘。拔线、手机被杀、电脑端消失，只丢正在飞的那几批，已保存的标签留着。
-- **两条退路仍在** —— 写 XMP（早期做法）和写 Immich 的代码都留着，`albumcat tag` / `albumcat run` 随时能切回去。
 
 ## 它长什么样
 
@@ -48,8 +45,8 @@
 手机上的 Aves：标签写进它自己的 appTags 表，按 角色 → Shameimaru Aya 浏览
 ```
 
-fork 里 Aves 的 `entry.tags` = 文件里的 `dc:subject` ∪ appTags 表，**显示和筛选读并集，所有回写文件的路径只读前者**——
-这道闸门保证 App 标签永远摸不到照片文件。为什么不再写 XMP、fork 具体改了哪些地方，见 [设计说明](docs/DESIGN.md)。
+Aves 的 `entry.tags` 是「照片自带的标签 ∪ appTags 表」：显示和筛选读并集，而所有回写文件的路径只读前者，
+所以 `角色|…` 不会被 Aves 自己写回照片。fork 具体改了哪些地方见 [设计说明](docs/DESIGN.md)。
 
 ## 快速开始
 
@@ -58,11 +55,11 @@ fork 里 Aves 的 `entry.tags` = 文件里的 `dc:subject` ∪ appTags 表，**�
 ```bat
 python tools\download_model.py     REM 下模型（356 MB）到 models\vit\，默认走 hf-mirror
 tools\install_deps.cmd             REM 建 .venv 并装依赖；默认 onnxruntime-directml，加 --cpu 强制 CPU
-tools\albumcat.cmd doctor          REM 自检：模型、包、推理后端、插件、Immich
+tools\albumcat.cmd doctor          REM 自检：模型、依赖、推理后端、插件
 tools\albumcat.cmd serve           REM 起手机要连的 HTTP 服务，默认 0.0.0.0:8899
 ```
 
-先不碰手机，只用本地图看看效果（不写任何东西）：
+先不碰手机，用本地图看效果：
 
 ```bat
 tools\albumcat.cmd plan samples\
@@ -85,20 +82,19 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 
 | 命令 | 作用 |
 |---|---|
-| `tools\albumcat.cmd doctor` | 自检模型、依赖、推理后端、插件、Immich 连通性 |
-| `tools\albumcat.cmd plan <路径>` | 只看不动：打印会给每张图打什么标签 |
+| `tools\albumcat.cmd doctor` | 自检模型、依赖、推理后端、插件 |
+| `tools\albumcat.cmd plan <路径>` | 只打印：每张图会给什么标签 |
 | `tools\albumcat.cmd serve [--port 8899] [--token X]` | 起手机端要连的服务 |
 | `tools\albumcat.cmd plugins` / `model` | 列出插件 / 打印模型的输入输出与特征宽度 |
 | `tools\albumcat.cmd train --data … --out …` | 用标注样本训练一个 `feature` 插件 |
-| `tools\albumcat.cmd tag <路径> [--apply]` | XMP 路线（早期做法，默认 dry-run） |
-| `tools\albumcat.cmd run --limit 50 [--apply]` | Immich 路线 |
-| `tools\albumcat.cmd undo --list` / `--run <id>` | 按运行 id 逐字节回滚 XMP 或 Immich 的改动 |
 | `tools\phone_link.cmd` | 没有局域网时，把手机的 `127.0.0.1:8899` 接到电脑 |
+
+早期写 XMP、写 Immich 的 `tag` / `run` / `undo` 子命令还在仓库里，但已舍弃、不再维护 —— 见 [已舍弃的路线](docs/LEGACY.md)。
 
 ## 配置
 
 所有值都有默认值，写在 `config.toml` 里的覆盖默认；**未知 key 直接报错**（防止打错字被静默忽略）。
-环境变量 `ALBUMCAT_<SECTION>_<FIELD>` 优先于文件，比如 `ALBUMCAT_IMMICH_API_KEY`。
+环境变量 `ALBUMCAT_<SECTION>_<FIELD>` 优先于文件，比如 `ALBUMCAT_MODEL_DEVICE=cpu`。
 
 | key | 默认 | 说明 |
 |---|---|---|
@@ -113,9 +109,8 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 | `publish.max_general_tags_per_image` | `25` | 通用标签上限（按分数取最高的） |
 | `publish.general_tag_denylist` | `[]` | 永不发布的关键字，比如 `commentary`、`watermark` |
 | `publish.*_root` | `角色` `作品` `版权` `分级` | 标签树的根 |
-| `publish.tree_in_subject` | `true` | 把 `角色\|…` 也写进 `dc:subject` —— Aves 只读这里 |
+| `publish.tree_in_subject` | `true` | 层级标签也放进扁平列表 —— 手机端存的就是扁平那份 |
 | `plugins.enabled` / `dir` / `disabled` | `true` / `plugins` / `[]` | 插件注册表 |
-| `immich.base_url` / `api_key` | — | 只走 Immich 路线才需要 |
 
 `config.toml` 里每个 key 都有注释，可以直接当参考读。
 
@@ -129,7 +124,7 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 | 通用 | `1girl`、`twintails` … | 有数量上限，可用 denylist 过滤 |
 | 插件 | 由插件决定 | 例如 `低质量图片` |
 
-层级分隔符在 Aves 里是 `|`（它把整串当一个扁平标签名），在 Immich 侧边栏里渲染成 `/` 的树。
+层级分隔符在 Aves 里写成 `|`（它把整串当作一个扁平标签名）。
 
 ## 手机端要点
 
@@ -153,12 +148,12 @@ WD14 的 vit 导出把 batch 轴钉死为 1，所以 `model.batch_size` 实际�
 ## 项目结构
 
 ```text
-src/albumcat/        服务端：config / tagger / rules / plugins / xmp / publishers / server / cli
+src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / HTTP 服务 / 命令行
 tools/               命令行入口与验证脚本（albumcat.cmd、download_model.py、verify_aves_tags.py …）
 plugins/             插件目录（示例 + 训练产物）
-android/             手机端：Kotlin 采集/诊断 + Flutter 壳（Aves fork 的补丁，见 docs）
+android/             早期手机端 App（已舍弃，见 docs/LEGACY.md）
 docs/                延伸阅读与 UI 证据截图
-immich/              可选的 Immich compose
+immich/              早期 Immich 用的 compose（已舍弃）
 config.toml          全部配置项，注释齐全
 ```
 
@@ -168,18 +163,20 @@ config.toml          全部配置项，注释齐全
 
 | 文档 | 内容 |
 |---|---|
-| [设计说明](docs/DESIGN.md) | 为什么标签不进照片、数据怎么分家、fork 改了哪些地方、管线技术要点 |
+| [设计说明](docs/DESIGN.md) | 标签存在哪、数据怎么分家、fork 改了哪些地方、管线技术要点 |
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
-| [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检，以及 XMP / Immich 两条路线 |
+| [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
 | [开发与验证](docs/DEVELOPMENT.md) | 构建 Aves fork、验证脚本、目录树、踩过的坑 |
 | [当前状态与已知限制](docs/STATUS.md) | 哪些验过、哪些只有代码证据、哪些坑没填 |
+| [已舍弃的路线](docs/LEGACY.md) | 写 XMP 进照片、写 Immich —— 仅存档 |
 
 ## 已知限制
 
 - 打标时**电脑必须开着**，模型不在手机上（376 MB 的模型 + onnxruntime 也塞不进这个 App）。
 - 抗中断只覆盖「电脑端消失 / 连接断」这一类；进程被系统直接杀掉时，正在飞的那批仍会丢。
 - 标签只存在于 Aves（fork 版）自己的数据库里，换个相册 App 就看不到。
+- **fork 的源码和 APK 都不在这个仓库里**：要自己按 [开发与验证](docs/DEVELOPMENT.md#构建) 构建一份。
 - 自动打出来的标签是**建议**：角色阈值故意定得高，宁可漏报。
 - 分级标签来自 WD14 的 rating head，内容合规由使用者自己负责。
 

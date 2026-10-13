@@ -5,11 +5,12 @@ Usage:
     python tools\\check_all.py -k runner      only the ones whose name matches
     python tools\\check_all.py --list
 
-These are the checks that keep the project's central promise -- *we do not
-touch your pixels* -- honest.  They are deliberately separate scripts rather
-than one test suite, because each one needs a different harness (the two JVM
-ones start a real `albumcat serve` and run the ONNX model, so a full pass takes
-a couple of minutes).
+These are the checks behind the claims in the docs: the plugin chain, the
+phone-side pipeline (plus the retired XMP / Immich write-out paths, which still
+run), the firewall preflight and the environment.  They are deliberately
+separate scripts rather than one test suite, because each one needs a different
+harness (the two JVM ones start a real `albumcat serve` and run the ONNX model,
+so a full pass takes a couple of minutes).
 
 Everything is launched as a subprocess with its output streaming straight
 through, so a failure is visible in context instead of buried in a summary.
@@ -122,8 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print("=" * width)
     if not bad:
-        print(f"  全部 {len(ok)} 项通过 —— 像素安全、XMP 可逆、"
-              f"手机端写回路径都在真实的代码上验过了。")
+        print(f"  全部 {len(ok)} 项通过 —— 推理后端、插件、手机端链路和防火墙预检"
+              f"都在真实的代码上验过了。")
         return 0
 
     print(f"  {len(ok)} 项通过，{len(bad)} 项失败：")

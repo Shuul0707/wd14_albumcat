@@ -142,7 +142,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     else:
         print("  disabled in config")
 
-    print("\nphone (route A)")
+    print("\nphone")
     from .firewall import preflight
     from .server import _lan_ips
 
@@ -157,7 +157,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # must not fail `doctor`.  It just needs to be impossible to miss.
     print(("  [OK] " if verdict else "  [WARN] " if verdict is False else "  [?] ") + message)
 
-    print("\nimmich")
+    print("\nimmich (retired route)")
     if args.offline or not cfg.immich.api_key:
         print("  skipped (no api key, or --offline)")
     else:
@@ -508,7 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("doctor", help="check model, packages, plugins and Immich")
+    p = sub.add_parser("doctor", help="check model, packages, plugins and the inference backend")
     p.add_argument("--offline", action="store_true", help="skip the Immich check")
     p.set_defaults(func=cmd_doctor)
 
@@ -551,7 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--apply", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_plan)
 
-    p = sub.add_parser("run", help="tag an Immich library and publish tags back")
+    p = sub.add_parser("run", help="tag an Immich library and publish tags back (retired route)")
     p.add_argument("--limit", type=int, default=None, help="stop after N assets")
     p.add_argument("--apply", action="store_true", help="actually write to Immich")
     p.add_argument("--top", type=int, default=8)
@@ -560,7 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "tag",
-        help="tag local JPEGs/PNGs and write the tags into their own XMP (route A)",
+        help="tag local JPEGs/PNGs and write the tags into their own XMP (retired route)",
     )
     p.add_argument("paths", nargs="*", help="files or directories (default: samples/)")
     p.add_argument("--apply", action="store_true", help="actually write the XMP")
@@ -568,14 +568,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--quiet", action="store_true", help="only print the summary")
     p.set_defaults(func=cmd_tag)
 
-    p = sub.add_parser("undo", help="reverse a recorded run (XMP and/or Immich)")
+    p = sub.add_parser("undo", help="reverse a recorded run (retired routes: XMP / Immich)")
     p.add_argument("--run", default=None, help="run id (default: every run)")
     p.add_argument("--list", action="store_true", help="list recorded runs and exit")
     p.set_defaults(func=cmd_undo)
 
     p = sub.add_parser(
         "serve",
-        help="run the LAN tagging service the phone app talks to (route A)",
+        help="run the LAN tagging service the phone app talks to",
     )
     p.add_argument("--host", default="0.0.0.0", help="bind address (default: all interfaces)")
     p.add_argument("--port", type=int, default=8899)

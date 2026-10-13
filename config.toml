@@ -35,6 +35,9 @@ batch_size = 8
 # a browser). 4 GB is a safe ceiling on an 8 GB card.
 gpu_mem_limit_mb = 4096
 
+# Retired route: writing tags into a self-hosted Immich library. The code and
+# `albumcat run` are still in the repo, but they are no longer maintained.
+# See docs/LEGACY.md.
 [immich]
 base_url = "http://127.0.0.1:2283"
 
@@ -51,17 +54,11 @@ timeout = 60.0
 download_concurrency = 4
 
 [publish]
-# Where tags land. Tags are hierarchical: a character called "Hatsune Miku"
-# becomes  角色/Hatsune Miku  (in XMP that is written as  角色|Hatsune Miku ).
-#
-# Immich renders this as a tree in the tag sidebar, and so do digiKam and
-# Lightroom. Aves does NOT -- it treats "角色|Hatsune Miku" as one flat tag
-# name (it reads only dc:subject, split on ";", and has no hierarchy concept).
-# That still works for browsing: tapping the tag filters to that character.
-#
-# The same roots drive both routes:
-#   route A (`albumcat tag`) writes them into the JPEG's own XMP
-#   route B (`albumcat run`) creates them as Immich tags
+# How tag names are built. A character called "Hatsune Miku" becomes
+#   角色|Hatsune Miku
+# -- one flat tag name, which is exactly what Aves shows and filters on. In the
+# hierarchical list the server also returns, the same entry is 角色/Hatsune Miku.
+# These roots are what namespaces every tag.
 character_root = "角色"
 series_root = "作品"
 copyright_root = "版权"
@@ -72,8 +69,8 @@ rating_enabled = true
 # Minimum score before a rating tag is applied at all.
 rating_threshold = 0.5
 
-# Also write the 1-5 star rating (Immich's rating field, or XMP's xmp:Rating).
-# Off by default because it can overwrite stars you set by hand.
+# Also emit a 1-5 star rating in the plan result. The Aves route does not use
+# it (the retired XMP / Immich routes did), so leave this off.
 write_star_rating = false
 
 # The review band. A character scoring between review_low and review_high is
@@ -96,25 +93,21 @@ max_general_tags_per_image = 25
 # Handy for stripping noise like "commentary" or "watermark".
 general_tag_denylist = []
 
-# Route A only. The tag *tree* (lr:HierarchicalSubject / digiKam:TagsList and
-# Immich's tag tree) carries only 角色 / 作品 / 分级 / 版权 by default, because
-# twenty-odd booru tags per photo would bury the character tags. General tags
-# still go into the flat dc:subject bag either way, so they stay searchable.
-# Turn this on to put them in the tree too.
+# The hierarchical list the server returns carries only 角色 / 作品 / 分级 / 版权
+# by default, because twenty-odd booru tags per photo would bury the character
+# tags. General tags still go into the flat list either way, so they stay
+# searchable. Turn this on to put them in the hierarchy too.
 general_tags_in_tree = false
 
-# Route A only, and important for the phone: also list the tree paths
-# ("角色|Hatsune Miku") in dc:subject. Aves builds a photo's tags from
-# dc:subject alone -- its native reader looks up XMP.DC_SUBJECT_PROP_NAME and
-# splits on ";", and it never reads lr:HierarchicalSubject or
-# digiKam:TagsList. With this off, a phone running Aves would show the bare
-# name "Hatsune Miku" but no "角色|Hatsune Miku" to tap.
-# Only turn it off if you browse exclusively in digiKam / Lightroom, where the
-# duplicate entries are just noise.
+# Important for the phone: also put the prefixed paths ("角色|Hatsune Miku") in
+# the flat list. The app stores that flat list as-is, so with this off it would
+# only have the bare name "Hatsune Miku" and nothing to filter a character by.
+# Leave it on.
 tree_in_subject = true
 
-# Safety catch: `albumcat run` refuses to touch Immich unless you pass
-# --apply. Set this to false to make writing the default.
+# Safety catch for the retired write-out routes: `albumcat tag` and
+# `albumcat run` do nothing unless you pass --apply. Set this to false to make
+# writing the default. The Aves route ignores this key.
 dry_run = true
 
 [plugins]
