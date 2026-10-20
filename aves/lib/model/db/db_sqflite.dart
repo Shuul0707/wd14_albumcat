@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/db/db.dart';
 import 'package:aves/model/db/db_sqflite_schema.dart';
@@ -36,6 +37,7 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
   static const videoPlaybackTable = SqfliteLocalMediaDbSchema.videoPlaybackTable;
   static const debugTable = SqfliteLocalMediaDbSchema.debugTable;
   static const appTagTable = SqfliteLocalMediaDbSchema.appTagTable;
+  static const appVectorTable = SqfliteLocalMediaDbSchema.appVectorTable;
 
   static const _entryInsertSliceMaxCount = 10000; // number of entries
   static const _queryCursorBufferSize = 1000; // number of rows
@@ -50,7 +52,7 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
       await path,
       onCreate: (db, version) => SqfliteLocalMediaDbSchema.createLatestVersion(db),
       onUpgrade: LocalMediaDbUpgrader.upgradeDb,
-      version: 17,
+      version: 18,
     );
 
     final maxIdRows = await _db.rawQuery('SELECT MAX(id) AS maxId FROM $entryTable');
@@ -558,6 +560,65 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
     if (ids.isEmpty) return;
     final batch = _db.batch();
     ids.forEach((id) => batch.delete(appTagTable, where: 'id = ?', whereArgs: [id]));
+    await batch.commit(noResult: true);
+  }
+
+  // semantic vectors
+  //
+  // Same contract as app tags: owned by the DB, never written back to a file.
+  // A vector is ~2 KB (512 × float32), so a full library is sizeable but the
+  // rows are disposable -- tagging rebuilds them.
+
+  @override
+  Future<void> clearAppVectors() async {
+    final count = await _db.delete(appVectorTable, where: '1');
+    debugPrint('$runtimeType clearAppVectors deleted $count rows');
+  }
+
+  @override
+  Future<Map<int, AppVector>> loadAppVectors() async {
+    final result = <int, AppVector>{};
+    final cursor = await _db.queryCursor(appVectorTable, bufferSize: _queryCursorBufferSize);
+    while (await cursor.moveNext()) {
+      final row = cursor.current;
+      final id = row['id'] as int?;
+      final model = row['model'] as String?;
+      final dim = row['dim'] as int?;
+      final vector = row['vector'] as String?;
+      if (id == null || model == null || dim == null || vector == null) continue;
+      result[id] = AppVector(
+        model: model,
+        dim: dim,
+        data: vector,
+        updated: (row['updated'] as int?) ?? 0,
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveAppVectors(Map<int, AppVector> rows) async {
+    if (rows.isEmpty) return;
+    final batch = _db.batch();
+    rows.forEach((id, vector) => batch.insert(
+          appVectorTable,
+          {
+            'id': id,
+            'model': vector.model,
+            'dim': vector.dim,
+            'vector': vector.data,
+            'updated': vector.updated,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        ));
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<void> removeAppVectors(Set<int> ids) async {
+    if (ids.isEmpty) return;
+    final batch = _db.batch();
+    ids.forEach((id) => batch.delete(appVectorTable, where: 'id = ?', whereArgs: [id]));
     await batch.commit(noResult: true);
   }
 

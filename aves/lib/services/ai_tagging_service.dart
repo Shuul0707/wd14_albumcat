@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/images.dart';
 import 'package:aves/model/entry/extensions/props.dart';
@@ -18,6 +19,8 @@ class AiTaggingOutcome {
   final Set<String> hierarchical;
   final Set<String> characters;
   final bool needsReview;
+  /// Chinese-CLIP embedding for this photo, when the service had a model.
+  final AppVector? vector;
   final String? error;
 
   const new({
@@ -27,6 +30,7 @@ class AiTaggingOutcome {
     this.hierarchical = const {},
     this.characters = const {},
     this.needsReview = false,
+    this.vector,
     this.error,
   });
 
@@ -297,6 +301,13 @@ class AiTaggingService {
         'size': entry.sizeBytes ?? 0,
         'image': base64Encode(thumb.$1),
         'cache': true,
+        // Ask for the Chinese-CLIP vector in the same round trip: tagging then
+        // doubles as indexing, so semantic search needs no second full pass.
+        // A service without the model just omits the field.
+        'include_vector': true,
+        // Float32 so the phone can read it straight into a Float32List
+        // instead of decoding half-floats by hand.
+        'vector_dtype': 'float32',
       });
     }
     return (payload: payload, carried: carried, failures: failures);
@@ -381,6 +392,7 @@ class AiTaggingService {
           (raw['characters'] as List?)?.map((c) => c is Map ? '${c['label']}' : '$c'),
         ),
         needsReview: raw['needs_review'] == true,
+        vector: _parseVector(raw['semantic']),
       ));
     }
     return outcomes;
@@ -436,6 +448,17 @@ class AiTaggingService {
     return value;
   }
 
+  /// A malformed vector must never cost the tags of that photo — the two are
+  /// independent results, and the vector can always be rebuilt later.
+  static AppVector? _parseVector(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return AppVector.fromJson(Map<String, dynamic>.from(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Set<String> _stringSet(Object? raw) {
     // Iterable, not List: `characters` is handed in as a lazy `.map()` result,
     // which is not a List and would silently come back empty.
@@ -466,6 +489,18 @@ class AiTaggingService {
   }
 
   static Map<String, dynamic> _decode(http.Response response) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      // A 503 here usually means "semantic model missing", which is a warning
+      // rather than a failed batch, so surface the server's message verbatim.
+      String detail;
+      try {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        detail = body is Map && body['error'] != null ? '${body['error']}' : '${response.body}';
+      } catch (_) {
+        detail = '${response.body}';
+      }
+      throw AiTaggingException('电脑端返回 ${response.statusCode}：$detail');
+    }
     if (response.statusCode == 401) {
       throw const AiTaggingException('令牌不对。电脑端用 --token 启动时，手机这里要填同一个令牌。');
     }

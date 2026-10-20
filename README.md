@@ -45,7 +45,8 @@
      2. 插件（可选）      → 追加识别结果，比如特定 IP 角色的精准识别
      3. 规则引擎          → 决定打哪些标签，置信度落在复核带的交给人看
      4. 返回标签列表
-      │  ② 层级标签  角色|Shameimaru Aya（走 HTTP，不落盘）
+        （可选）Chinese-CLIP 图像塔 → 512 维语义向量，跟标签一起回传
+      │  ② 层级标签  角色|Shameimaru Aya + 语义向量（走 HTTP，不落盘）
       ▼
 手机上的 Aves：标签写进它自己的 appTags 表，按 角色 → Shameimaru Aya 浏览
 ```
@@ -173,6 +174,7 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
+| [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP：按「沙滩」这种描述找图，向量怎么存、文本塔能否端侧跑 |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
 | [参与开发](CONTRIBUTING.md) | 环境、改完怎么验、代码风格、跟着上游升级、许可 |
 | [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建、怎么升上游 |

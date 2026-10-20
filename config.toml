@@ -94,3 +94,34 @@ dir = "plugins"
 
 # Plugin ids to skip without deleting them.
 disabled = []
+
+[semantic]
+# Chinese-CLIP: free-form search ("沙滩", "雨天的街道") next to the WD14 tags.
+# WD14 answers "is one of my 9083 labels here?"; CLIP answers "how close is
+# this photo to this phrase?" -- different questions, different models.
+#
+# Models are optional. Without them the tagger works exactly as before and
+# `GET /semantic` reports available = false. Build them with:
+#     python tools/export_chinese_clip_onnx.py
+#
+# The image tower (~90 MB after int8) runs here, once per photo; the text
+# tower is small enough to run on the phone per query, but `/encode_text`
+# serves it here too.
+enabled = true
+dir = "models/chinese-clip"
+image_model = "image_encoder.onnx"
+text_model = "text_encoder.onnx"
+vocab_file = "vocab.txt"
+
+# Same order as the tagger: auto -> DirectML -> CUDA -> CPU.
+device = "auto"
+
+# Must match the export. ViT-B/16 = 224 px, 512-d.
+image_size = 224
+dim = 512
+
+# Wire format for vectors: float16 = 1 KB per photo, float32 = 2 KB.
+dtype = "float16"
+
+max_text_length = 52
+model_id = "chinese-clip-vit-base-patch16"

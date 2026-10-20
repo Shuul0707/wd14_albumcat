@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:aves/model/app_tags.dart';
+import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/dynamic_albums.dart';
 import 'package:aves/model/entry/entry.dart';
@@ -65,6 +66,7 @@ class MediaStoreSource extends CollectionSource {
     await favourites.init();
     await appTags.init();
     appTags.addListener(onAppTagsChanged);
+    await appVectors.init();
     albumGrouping.init();
     albumGrouping.setGroups(settings.albumGroups);
     albumGrouping.registerSource(this);

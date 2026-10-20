@@ -104,5 +104,5 @@ class TestSave:
 
         dest = Config().save(tmp_path / "out.toml")
         raw = tomllib.loads(dest.read_text(encoding="utf-8"))
-        assert set(raw) == {"model", "publish", "plugins"}
+        assert set(raw) == {"model", "publish", "plugins", "semantic"}
         assert raw["publish"]["character_root"] == "角色"

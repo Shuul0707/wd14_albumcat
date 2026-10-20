@@ -130,10 +130,60 @@ class PluginConfig:
 
 
 @dataclass
+class SemanticConfig:
+    """Chinese-CLIP, used for free-form ("沙滩") search next to the WD14 tags.
+
+    The two models answer different questions and must not be confused:
+
+    * WD14  : "is one of my 9083 labels in this picture?"   (closed vocabulary)
+    * CLIP  : "how close is this picture to this phrase?"   (open vocabulary)
+
+    The image tower runs on the PC (ViT-B/16, ~100 ms/photo on DirectML); the
+    text tower is a single short forward pass, which is why the phone can run
+    it by itself. Missing files are not an error -- ``/semantic`` reports
+    ``available: false`` and tagging keeps working.
+    """
+
+    enabled: bool = True
+    """Turn the whole feature off with ``enabled = false``."""
+
+    dir: str = "models/chinese-clip"
+    """Directory holding the two ONNX towers + ``vocab.txt``."""
+
+    image_model: str = "image_encoder.onnx"
+    text_model: str = "text_encoder.onnx"
+    vocab_file: str = "vocab.txt"
+
+    device: str = "auto"
+    """``auto`` | ``dml`` | ``cuda`` | ``cpu`` (same order as the tagger)."""
+
+    image_size: int = 224
+    """Chinese-CLIP ViT-B/16 input size. Do not change without re-exporting."""
+
+    dim: int = 512
+    """Embedding width; the phone stores this so a model swap is detectable."""
+
+    dtype: str = "float16"
+    """Wire format for vectors: ``float16`` (1 KB) or ``float32`` (2 KB)."""
+
+    max_text_length: int = 52
+    """Chinese-CLIP's default token limit (64 minus specials in practice)."""
+
+    model_id: str = "chinese-clip-vit-base-patch16"
+    """Free-form id echoed to the phone; change it when you swap towers."""
+
+    @property
+    def path(self) -> Path:
+        p = Path(self.dir)
+        return p if p.is_absolute() else (PROJECT_ROOT / p)
+
+
+@dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     publish: PublishConfig = field(default_factory=PublishConfig)
     plugins: PluginConfig = field(default_factory=PluginConfig)
+    semantic: SemanticConfig = field(default_factory=SemanticConfig)
     root: Path = PROJECT_ROOT
 
     # ------------------------------------------------------------------ #
@@ -159,6 +209,7 @@ class Config:
             model=_fill(ModelConfig, raw.get("model")),
             publish=_fill(PublishConfig, raw.get("publish")),
             plugins=_fill(PluginConfig, raw.get("plugins")),
+            semantic=_fill(SemanticConfig, raw.get("semantic")),
         )
         if resolved is not None:
             cfg.root = resolved.parent
@@ -168,7 +219,7 @@ class Config:
     def apply_env(self, env: dict[str, str] | None = None) -> "Config":
         """Overlay ``ALBUMCAT_<SECTION>_<FIELD>`` environment variables."""
         env = os.environ if env is None else env
-        for section_name in ("model", "publish", "plugins"):
+        for section_name in ("model", "publish", "plugins", "semantic"):
             section = getattr(self, section_name)
             for f in fields(section):
                 key = f"ALBUMCAT_{section_name.upper()}_{f.name.upper()}"
@@ -179,7 +230,7 @@ class Config:
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
-        for section_name in ("model", "publish", "plugins"):
+        for section_name in ("model", "publish", "plugins", "semantic"):
             out[section_name] = asdict(getattr(self, section_name))
         return out
 
