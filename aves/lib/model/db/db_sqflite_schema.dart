@@ -16,6 +16,9 @@ class SqfliteLocalMediaDbSchema {
   // the media files: no XMP/IPTC is ever written for them, so a tagged photo
   // keeps its bytes, its mtime and its inode
   static const appTagTable = 'appTags';
+  // Chinese-CLIP embeddings, derived the same way and kept out of the files
+  // for the same reason: 512 float32 per photo is ~2 KB that no other app reads
+  static const appVectorTable = 'appVectors';
 
   static const allTables = [
     entryTable,
@@ -30,6 +33,7 @@ class SqfliteLocalMediaDbSchema {
     videoPlaybackTable,
     debugTable,
     appTagTable,
+    appVectorTable,
   ];
 
   static Future<void> createLatestVersion(Database db) async {
@@ -150,6 +154,19 @@ class SqfliteLocalMediaDbSchema {
           'CREATE TABLE $appTagTable('
           'id INTEGER PRIMARY KEY'
           ', tags TEXT'
+          ')',
+        );
+      case appVectorTable:
+        return db.execute(
+          'CREATE TABLE $appVectorTable('
+          'id INTEGER PRIMARY KEY'
+          // which image tower produced it: vectors from different models live
+          // in different spaces and must never be compared with each other
+          ', model TEXT'
+          ', dim INTEGER'
+          // base64 of little-endian float32
+          ', vector TEXT'
+          ', updated INTEGER'
           ')',
         );
       default:

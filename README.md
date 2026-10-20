@@ -45,7 +45,8 @@
      2. 插件（可选）      → 追加识别结果，比如特定 IP 角色的精准识别
      3. 规则引擎          → 决定打哪些标签，置信度落在复核带的交给人看
      4. 返回标签列表
-      │  ② 层级标签  角色|Shameimaru Aya（走 HTTP，不落盘）
+        （可选）Chinese-CLIP 图像塔 → 512 维语义向量，跟标签一起回传
+      │  ② 层级标签  角色|Shameimaru Aya + 语义向量（走 HTTP，不落盘）
       ▼
 手机上的 Aves：标签写进它自己的 appTags 表，按 角色 → Shameimaru Aya 浏览
 ```
@@ -97,6 +98,8 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 | `tools\albumcat.cmd plugins` / `model` | 列出插件 / 打印模型的输入输出与特征宽度 |
 | `tools\albumcat.cmd train --data … --out …` | 用标注样本训练一个 `feature` 插件 |
 | `tools\phone_link.cmd` | 没有局域网时，把手机的 `127.0.0.1:8899` 接到电脑 |
+| `python tools\serve_semantic_demo.py --dir samples` | 浏览器里看语义搜索效果（不用手机、不用 Aves） |
+| `tools\serve_semantic_demo.cmd [目录]` | 同上，双击就行；不带参数用 `samples\` |
 
 ## 配置
 
@@ -151,8 +154,8 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 ## 项目结构
 
 ```text
-src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / HTTP 服务 / 命令行
-aves/                手机端：Aves 的 fork 源码（标签存进它自己的 appTags 表）
+src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / Chinese-CLIP / HTTP 服务 / 命令行
+aves/                手机端：Aves 的 fork 源码（标签与语义向量存进它自己的 appTags / appVectors 表）
 tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
 plugins/             插件目录（示例 + 训练产物）
 tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）
@@ -173,6 +176,7 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
+| [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP：按「沙滩」这种描述找图，向量怎么存、文本塔能否端侧跑 |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
 | [参与开发](CONTRIBUTING.md) | 环境、改完怎么验、代码风格、跟着上游升级、许可 |
 | [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建、怎么升上游 |

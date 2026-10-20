@@ -18,20 +18,28 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`app_tag
 
 ## 相对上游改了什么
 
-新增（5 个文件）：
+新增（11 个文件）：
 
 | 文件 | 作用 |
 | --- | --- |
 | `lib/model/app_tags.dart` | `app_tags` 表的内存模型；`ChangeNotifier`，改了标签集合就通知界面刷新 |
-| `lib/services/ai_tagging_service.dart` | 取缩略图、POST `/plan_batch`、把结果一批一落盘；单批失败重试一次，连着 3 批失败才停 |
-| `lib/widgets/dialogs/ai_tagging_page.dart` | 上面那个设置页 / 进度框 |
+| `lib/services/ai_tagging_service.dart` | 取缩略图、POST `/plan_batch`、把结果一批一落盘；单批失败重试一次，连着 3 批失败才停。请求里带 `include_vector`，一趟同时拿语义向量 |
+| `lib/widgets/dialogs/ai_tagging_page.dart` | 上面那个设置页 / 进度框；底部多一个「语义搜索」入口 |
 | `lib/model/settings/modules/ai_tagging.dart` | 打标签相关设置项（地址、令牌、并发、只看角色…） |
 | `android/gradle/gradle-daemon-jvm.properties.disabled` | 把上游钉死「用 Adoptium JDK 构建守护进程」的那份配置停用（改后不强制下载第二个 JDK） |
+| `lib/model/app_vector.dart` | 单条语义向量（`model` / `dim` / base64 float32）；`decode()` 成 `Float32List` |
+| `lib/model/app_vectors.dart` | `app_vectors` 表的内存模型；把全库向量拼成一张 `N×dim` 矩阵，`nearest()` 做余弦 top-k（1 万张几毫秒） |
+| `lib/services/semantic_search_service.dart` | 查询编码（优先端侧、回落 PC 的 `/encode_text`）＋排序，结果映射回 `AvesEntry` |
+| `lib/services/on_device_text_encoder.dart` | 端侧文本塔的 Dart 侧：私有目录检查、`.part` 下载后改名、加载与编码 |
+| `lib/widgets/dialogs/semantic_search_page.dart` | 语义搜索页：输入中文描述、显示相似度、「下载到本机」与「本机/电脑编码」状态 |
+| `android/.../channel/calls/TextEncoderHandler.kt` | 端侧 Chinese-CLIP 文本塔：onnxruntime-android 加载、自实现 BERT WordPiece、原生侧 L2 归一化 |
 
 数据库与标签模型：
 
 - `lib/model/db/db_sqflite_schema.dart`、`db_sqflite.dart`、`db_sqflite_upgrade.dart`、`db.dart`
-  —— schema 升到 **v17**，多一张 `app_tags` 表（条目 id → `;` 分隔的标签串）以及它的增删查接口与迁移。
+  —— schema 升到 **v18**，多两张表：`app_tags`（条目 id → `;` 分隔的标签串）与
+  `app_vectors`（条目 id → 图像塔 id / 维度 / base64 float32 向量），各带增删查接口
+  与迁移（16→17、17→18）。向量和标签一样只住在数据库里，照片文件一个字节都不改。
 - `lib/model/entry/entry.dart` —— 条目显示的标签是「文件自带的标签 ∪ app 标签」的并集。
 - `lib/model/entry/extensions/metadata_edition.dart` —— **闸门**：界面上改标签时，只有本来就在
   文件里的标签会被写回文件（IPTC/XMP），纯 app 标签永远不落到照片上。

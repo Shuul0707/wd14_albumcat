@@ -21,8 +21,16 @@ phone, and the original photo never leaves the device at all.
 Endpoints
     GET  /health    liveness + what model/plugins are loaded
     GET  /config    the roots and thresholds the phone should agree with
+    GET  /semantic  is Chinese-CLIP loaded, and at what width/dtype
     POST /plan      one image  -> one finished tag set
     POST /plan_batch  [{...}, ...] -> [{...}, ...]
+    POST /encode_text  {"text": "沙滩"} -> one query vector
+
+Semantic search splits across the two machines on purpose: the PC runs the
+image tower once per photo (it is the expensive half) and hands the vector
+back with the tags; the phone keeps that vector beside ``appTags`` and runs
+the *text* tower per query -- or calls ``/encode_text`` when it has no model
+of its own. See ``semantic.py`` and ``docs/SEMANTIC.md``.
 
 Request body for /plan, either form:
 
@@ -53,6 +61,12 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import Config
 from .pipeline import Pipeline, load_tagger
+from .semantic import (
+    SemanticEncoder,
+    SemanticUnavailable,
+    apply_vector_policy,
+    pack_vector,
+)
 from .tagfields import plan_to_tag_fields
 
 __all__ = ["TaggingService", "serve"]
@@ -90,6 +104,9 @@ class TaggingService:
     def __init__(self, config: Config, *, warmup: bool = True) -> None:
         self.config = config
         self.pipeline = Pipeline(config, tagger=load_tagger(config, warmup=warmup))
+        # Chinese-CLIP is optional: a missing model leaves `available` False and
+        # the tagging endpoints keep working exactly as before.
+        self.semantic = SemanticEncoder(config.semantic)
         self._lock = threading.Lock()
         self._cache: dict[str, dict] = {}
         self._cache_order: list[str] = []
@@ -119,6 +136,7 @@ class TaggingService:
             "model": self.tagger.describe() if self.tagger else None,
             "plugins": plugins,
             "plugin_errors": plugin_errors,
+            "semantic": self.semantic.info().to_dict(),
             "uptime_s": round(time.time() - self.started, 1),
             "cache": {"entries": len(self._cache), "hits": self.cache_hits},
         }
@@ -140,6 +158,13 @@ class TaggingService:
             "max_general_tags_per_image": p.max_general_tags_per_image,
             "threshold": self.config.model.threshold,
             "character_threshold": self.config.model.character_threshold,
+            "semantic": {
+                "enabled": self.config.semantic.enabled,
+                "available": self.semantic.available,
+                "model": self.config.semantic.model_id,
+                "dim": self.config.semantic.dim,
+                "dtype": self.config.semantic.dtype,
+            },
         }
 
     # -- work -------------------------------------------------------------- #
@@ -160,8 +185,20 @@ class TaggingService:
         size: int = 0,
         date_taken: int = 0,
         use_cache: bool = True,
+        include_vector: bool = False,
+        vector_dtype: str | None = None,
     ) -> dict:
-        """Tag one already-encoded image and return the finished tag set."""
+        """Tag one already-encoded image and return the finished tag set.
+
+        With ``include_vector`` the response also carries the Chinese-CLIP
+        embedding for this photo, so a tagging run doubles as an indexing run.
+        ``vector_dtype`` overrides the configured wire format per request --
+        a client that can memory-map float32 (``Float32List.view``) asks for
+        that instead of decoding half-floats by hand.
+        """
+        dtype = vector_dtype or self.config.semantic.dtype
+        if dtype not in ("float16", "float32"):
+            raise ValueError(f"unsupported vector_dtype: {dtype}")
         from PIL import Image  # local import: keeps module import cheap
 
         digest = hashlib.sha256(data).hexdigest()
@@ -173,7 +210,7 @@ class TaggingService:
             cached["cached"] = True
             # report the cache lookup, not the inference that filled it
             cached["ms"] = round((time.perf_counter() - started) * 1000, 2)
-            return cached
+            return self._with_vector_policy(cached, include_vector, dtype)
 
         try:
             with Image.open(io.BytesIO(data)) as im:
@@ -186,6 +223,7 @@ class TaggingService:
         # GPU from being oversubscribed when several phones sync at once.
         with self._lock:
             plan, tagset = self.pipeline.plan_image(image, asset_id=asset_id, path=name)
+            semantic_block = self._semantic_block(image, dtype)
 
         flat, hierarchical = plan_to_tag_fields(plan, self.config.publish)
         star = plan.star_rating if self.config.publish.write_star_rating else None
@@ -220,6 +258,8 @@ class TaggingService:
                 for p in tagset.general
             ],
             "ratings": {k: round(v, 4) for k, v in tagset.ratings.items()},
+            # the phone stores this next to the tags; see docs/SEMANTIC.md
+            "semantic": semantic_block,
             "engine": {
                 "model": Path(self.config.model.dir).name,
                 "device": self.config.model.device,
@@ -231,7 +271,55 @@ class TaggingService:
         }
         if use_cache:
             self._remember(digest, payload)
-        return payload
+        return self._with_vector_policy(payload, include_vector, dtype)
+
+    # -- semantic ---------------------------------------------------------- #
+
+    def _semantic_block(self, image, dtype: str | None = None) -> dict | None:
+        """Encode one photo, or ``None`` when the towers are not loaded.
+
+        Called inside ``self._lock`` so image encoding and tagging never fight
+        over the GPU. A failure here must not fail the tag request -- a photo
+        without a vector is still a perfectly good tagged photo.
+        """
+        if not self.semantic.available:
+            return None
+        try:
+            vector = self.semantic.encode_image(image)
+        except Exception as exc:  # noqa: BLE001 - degrade, never abort
+            log.warning("semantic encode failed: %s", exc)
+            return None
+        dtype = dtype or self.config.semantic.dtype
+        return {
+            "model": self.config.semantic.model_id,
+            "dim": int(vector.shape[0]),
+            "dtype": dtype,
+            "vector": pack_vector(vector, dtype),
+        }
+
+    @staticmethod
+    def _with_vector_policy(payload: dict, include_vector: bool, dtype: str | None = None) -> dict:
+        """Kept as a thin delegate so the logic is testable without the tagger."""
+        return apply_vector_policy(payload, include_vector, dtype)
+
+    def semantic_info(self) -> dict:
+        return {"ok": True, **self.semantic.info().to_dict()}
+
+    def encode_text(self, text: str, dtype: str | None = None) -> dict:
+        """Encode one query phrase. Raises SemanticUnavailable when text is off."""
+        started = time.perf_counter()
+        vector = self.semantic.encode_text(text)
+        dtype = dtype or self.config.semantic.dtype
+        if dtype not in ("float16", "float32"):
+            raise ValueError(f"unsupported vector_dtype: {dtype}")
+        return {
+            "ok": True,
+            "model": self.config.semantic.model_id,
+            "dim": int(vector.shape[0]),
+            "dtype": dtype,
+            "vector": pack_vector(vector, dtype),
+            "ms": round((time.perf_counter() - started) * 1000, 1),
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -289,11 +377,17 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/config":
             self._send(200, self.service.config_view())
             return
+        if path == "/semantic":
+            self._send(200, self.service.semantic_info())
+            return
+        if path == "/semantic/model":
+            self._send_model()
+            return
         self._error(404, f"no such endpoint: {path}")
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
-        if path not in ("/plan", "/plan_batch"):
+        if path not in ("/plan", "/plan_batch", "/encode_text"):
             self._error(404, f"no such endpoint: {path}")
             return
         if not self._authed():
@@ -310,10 +404,14 @@ class _Handler(BaseHTTPRequestHandler):
 
         ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         try:
-            if path == "/plan":
+            if path == "/encode_text":
+                self._send(200, self._handle_encode_text(raw))
+            elif path == "/plan":
                 self._send(200, self._handle_one(raw, ctype))
             else:
                 self._send(200, self._handle_batch(raw, ctype))
+        except SemanticUnavailable as exc:
+            self._error(503, str(exc))
         except ValueError as exc:
             self._error(400, str(exc))
         except Exception as exc:  # noqa: BLE001 - never kill the connection silently
@@ -342,7 +440,59 @@ class _Handler(BaseHTTPRequestHandler):
             size=int(obj.get("size") or 0),
             date_taken=int(obj.get("date_taken") or 0),
             use_cache=bool(obj.get("cache", True)),
+            include_vector=bool(obj.get("include_vector", False)),
+            vector_dtype=(str(obj["vector_dtype"]) if obj.get("vector_dtype") else None),
         )
+
+    def _send_model(self) -> None:
+        """Stream one model file to the phone, which keeps its own copy.
+
+        Only the two text-tower files are served: the phone never runs the
+        image tower, and handing out 300 MB over the LAN should not be a
+        one-liner either.
+        """
+        if not self._authed():
+            self._error(401, "bad or missing X-Albumcat-Token")
+            return
+        allowed = {"text_encoder.onnx", "vocab.txt"}
+        name = (self._query().get("file") or ["text_encoder.onnx"])[0]
+        if name not in allowed:
+            self._error(400, f"only {sorted(allowed)} can be served")
+            return
+        path = self.service.config.semantic.path / name
+        if not path.exists():
+            self._error(404, f"not found: {name} (run tools/export_chinese_clip_onnx.py)")
+            return
+
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("X-Albumcat-File", name)
+        self.end_headers()
+        with open(path, "rb") as fh:
+            while True:
+                chunk = fh.read(1 << 20)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
+    def _handle_encode_text(self, raw: bytes) -> dict:
+        """POST /encode_text  {"text": "沙滩"}  -> one unit vector."""
+        try:
+            obj = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"bad JSON: {exc}") from exc
+        if isinstance(obj, dict):
+            text = obj.get("text") or obj.get("query") or ""
+        elif isinstance(obj, str):
+            text = obj
+        else:
+            raise ValueError("expected {'text': '...'} or a bare JSON string")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("missing 'text'")
+        dtype = obj.get("dtype") if isinstance(obj, dict) else None
+        return self.service.encode_text(text, dtype=(str(dtype) if dtype else None))
 
     def _handle_one(self, raw: bytes, ctype: str) -> dict:
         q = self._query()

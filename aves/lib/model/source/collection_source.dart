@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:aves/model/app_tags.dart';
+import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/catalog.dart';
@@ -234,6 +235,8 @@ abstract class CollectionSource with SourceBase, AlbumMixin, CountryMixin, Place
     await favourites.removeIds(oldIds);
     await covers.removeIds(oldIds);
     await appTags.removeIds(oldIds);
+    // a deleted photo's vector is dead weight; re-tagging would rebuild it
+    await appVectors.removeIds(oldIds);
     await localMediaDb.removeIds(oldIds);
 
     _disposeEntries((id, _) => oldIds.contains(id));

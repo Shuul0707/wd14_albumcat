@@ -59,6 +59,8 @@ class LocalMediaDbUpgrader {
           await _upgradeFrom15(db);
         case 16:
           await _upgradeFrom16(db);
+        case 17:
+          await _upgradeFrom17(db);
       }
       oldVersion++;
     }
@@ -594,6 +596,23 @@ class LocalMediaDbUpgrader {
       'CREATE TABLE $appTagTable('
       'id INTEGER PRIMARY KEY'
       ', tags TEXT'
+      ')',
+    );
+  }
+
+  static Future<void> _upgradeFrom17(Database db) async {
+    debugPrint('upgrading DB from v17');
+
+    // semantic vectors (Chinese-CLIP), derived like app tags and kept out of
+    // the media files. `model` travels with the row so a tower swap can be
+    // detected instead of silently mixing two incompatible spaces.
+    await db.execute(
+      'CREATE TABLE $appVectorTable('
+      'id INTEGER PRIMARY KEY'
+      ', model TEXT'
+      ', dim INTEGER'
+      ', vector TEXT'
+      ', updated INTEGER'
       ')',
     );
   }

@@ -173,6 +173,7 @@ open class MainActivity : FlutterFragmentActivity() {
         MethodChannel(messenger, SecurityHandler.CHANNEL).setMethodCallHandler(SecurityHandler(this))
         MethodChannel(messenger, StorageHandler.CHANNEL).setMethodCallHandler(StorageHandler(this))
         MethodChannel(messenger, StoragePermissionHandler.CHANNEL).setMethodCallHandler(StoragePermissionHandler(this))
+        MethodChannel(messenger, TextEncoderHandler.CHANNEL).setMethodCallHandler(TextEncoderHandler(this))
         MethodChannel(messenger, WallpaperHandler.CHANNEL).setMethodCallHandler(WallpaperHandler(this))
         // - need Activity
         MethodChannel(messenger, AppProfileHandler.CHANNEL).setMethodCallHandler(AppProfileHandler(this))

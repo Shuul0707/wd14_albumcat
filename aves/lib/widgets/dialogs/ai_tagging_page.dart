@@ -1,10 +1,13 @@
 import 'dart:math';
 
 import 'package:aves/model/app_tags.dart';
+import 'package:aves/model/app_vector.dart';
+import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/props.dart';
 import 'package:aves/model/settings/settings.dart';
 import 'package:aves/services/ai_tagging_service.dart';
+import 'package:aves/widgets/dialogs/semantic_search_page.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Runs the external tagger over [entries] and stores the answers in Aves' own
@@ -115,11 +118,14 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
       // losing the session.
       Future<void> save(List<AiTaggingOutcome> outcomes) async {
         final writes = <int, Set<String>>{};
+        final vectors = <int, AppVector>{};
         for (final outcome in outcomes) {
           if (!outcome.ok) {
             failed++;
             continue;
           }
+          final vector = outcome.vector;
+          if (vector != null) vectors[outcome.entryId] = vector;
           final selection = outcome.selectTags(includeGeneral: _includeGeneral);
           if (selection.isEmpty) {
             empty++;
@@ -129,6 +135,9 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
           tagged++;
         }
         if (writes.isNotEmpty) await appTags.setTagsById(writes);
+        // Vectors are stored even when no tag was published: a photo the tagger
+        // had nothing to say about is still searchable by meaning.
+        if (vectors.isNotEmpty) await appVectors.saveById(vectors);
       }
 
       await AiTaggingService.tag(
@@ -252,6 +261,20 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
               OutlinedButton(
                 onPressed: _running ? () => setState(() => _stopRequested = true) : null,
                 child: const Text('停止'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _running || appVectors.entryCount == 0
+                    ? null
+                    : () => showDialog(
+                          context: context,
+                          builder: (_) => SemanticSearchPage(
+                            entries: widget.entries,
+                            server: settings.aiTaggingServer,
+                            token: settings.aiTaggingToken,
+                          ),
+                        ),
+                child: const Text('语义搜索'),
               ),
             ],
           ),

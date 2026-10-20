@@ -235,6 +235,8 @@ dependencies {
 
     implementation(libs.commonsware.cwac)
     implementation(libs.metadata.extractor)
+    // semantic search: Chinese-CLIP text tower on the device
+    implementation(libs.onnx.runtime)
     implementation(libs.glide)
     implementation(libs.google.material)
     // SLF4J implementation for `mp4parser`

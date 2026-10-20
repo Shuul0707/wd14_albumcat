@@ -1,3 +1,4 @@
+import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/dynamic_albums.dart';
 import 'package:aves/model/entry/entry.dart';
@@ -112,6 +113,19 @@ abstract class LocalMediaDb {
   Future<void> saveAppTags(Map<int, String> rows);
 
   Future<void> removeAppTags(Set<int> ids);
+
+  // app vectors
+  //
+  // Chinese-CLIP embeddings, derived like app tags and kept out of the media
+  // files. One row per entry; `model` says which image tower produced it.
+
+  Future<void> clearAppVectors();
+
+  Future<Map<int, AppVector>> loadAppVectors();
+
+  Future<void> saveAppVectors(Map<int, AppVector> rows);
+
+  Future<void> removeAppVectors(Set<int> ids);
 
   // covers
 
