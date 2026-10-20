@@ -111,7 +111,7 @@ flutter build apk --debug --flavor libre --target-platform android-arm64 -t lib/
    - **`android/`**：Aliyun 镜像、`kotlin.incremental=false`、删掉的 `org.gradle.java.home`、停用的
      `gradle-daemon-jvm.properties` 都是本机/国内网络补丁，上游不会带，也不该指望它带。
 5. **改完必须重验，一步都不能省**：`dart analyze` 干净 → `tools\aves_build.ps1 -Platform android-x64` 出包 →
-   装到模拟器 → `tools\verify_aves_tags.py verify` 11/11。换版本、换设备，验的东西都要重验一遍。
+   装到模拟器 → `tools\verify_aves_tags.py verify` 12/12。换版本、换设备，验的东西都要重验一遍。
 6. **顺手更新两份文档**：本文件顶部的基线与「相对上游改了什么」的表，以及仓库根 `docs/STATUS.md` 里
    「fork 基于上游 Aves 1.15.5」那一行。
 

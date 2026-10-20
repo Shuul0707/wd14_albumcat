@@ -8,17 +8,17 @@
 
 | 部分 | 状态 |
 |---|---|
-| **Aves fork：标签只进相册 App 自己的库** | ✅ **端到端跑通**（`tools\verify_aves_tags.py` 11/11：4/4 探针文件的 SHA256 与 mtime 都不变、数据库 `user_version=17`、appTags 逐文件对得上——每个文件恰好一个 `角色\|X` 标签；提速版 APK 重装后又跑过一遍，仍 11/11） |
+| **Aves fork：标签只进相册 App 自己的库** | ✅ **端到端跑通**（`tools\verify_aves_tags.py` **12/12**：4/4 探针文件的 SHA256 与 mtime 都不变、数据库 `user_version=18`、appTags 逐文件对得上——每个文件恰好一个 `角色\|X` 标签、`appVectors` 表存在。提速版重装、合并语义搜索后重装各跑过一遍，都是全绿） |
 | Aves fork：在相册 UI 里按角色浏览 | ✅ 已在模拟器上验过（Tags 页出现 `角色\|Hakurei Reimu 4`、`角色\|Shameimaru Aya 3`、`角色\|Kasane Teto 3`、`角色\|Kagiyama Hina 2` 等磁贴，点进去集合里只剩这个角色的照片；截图在 `docs\evidence\`） |
 | Aves fork：纯 App 标签绝不会写进照片 | ✅ 代码闸门 + 调用点改造（`metadata_edition.dart` 的 `editTags()` 把只存在于 appTags 的标签从待写入集合里剔掉，所有回写 UI 改读 `fileTags`；显示/筛选仍读并集），`dart analyze` 干净 |
-| Aves fork：构建（x64 / arm64） | ✅ 通过（`tools\aves_build.ps1`，源码就是仓库里的 `aves/`；x64 约 188 MB、arm64 约 204 MB，均已解包确认引擎 ABI 与包名匹配） |
+| Aves fork：构建（x64 / arm64） | ✅ 通过（`tools\aves_build.ps1`，源码就是仓库里的 `aves/`；x64 **273,024,120 B**、arm64 **273,024,261 B**，均已解包确认引擎 ABI 与包名匹配。比合并语义搜索前大约 75 MB，是因为 `com.microsoft.onnxruntime:onnxruntime-android` 把 `libonnxruntime.so` 打进了三个 ABI） |
 | Aves fork：真机安装 | ⏳ arm64 包已构建好，等真机装上跑一轮 |
-| 发布 | ✅ [Releases v0.1.0](https://github.com/Shuul0707/wd14_albumcat/releases/tag/v0.1.0) 里放着两个 APK。干净安装（先卸载、再装 release 包、走完首启授权）后跑一轮：**12 张全部打上标签、0 失败**，`tools\verify_aves_tags.py` 11/11 |
+| 发布 | ✅ [Releases v0.2.0](https://github.com/Shuul0707/wd14_albumcat/releases/tag/v0.2.0) 里放着两个 APK（含语义搜索与数据线回退）。干净安装（先卸载、再装 release 包、走完首启授权）后跑一轮：**12 张全部打上标签、0 失败**，`tools\verify_aves_tags.py` 12/12 |
 | 工程化：许可 / 安装 / CI / 单测 | ✅ 已补（MIT [LICENSE](../LICENSE)、`pip install -e ".[dml,dev]"` 与 `albumcat` 命令、**77 条 pytest** 覆盖规则 / 标签字段 / 配置 / 语义向量、GitHub Actions 每次 push 跑 pytest + 仓库卫生；Flutter 侧分析手动触发。`tools/check_all.py` 是 **7 项**一条命令：仓库卫生、单测、插件链路、防火墙预检、环境自检、语义搜索契约、`/plan_batch` 契约） |
 | Aves fork：没有局域网时走数据线 | ✅ 已验（`tools\phone_link.cmd` = `adb reverse tcp:8899 tcp:8899`；App 侧 `resolveReachable()` 先探填的地址再退回 `http://127.0.0.1:8899`。模拟器上把发往电脑 `10.0.2.2:8899` 的出站流量 `REJECT` 掉后，25 张仍 19 写 / 0 失败，日志写「电脑端在数据线上」；删规则后又变回局域网、3.1 s。真 USB 电缆本身没验，adb 在模拟器上走 loopback） |
 | Aves fork：打标提速（自解码 448px + q88 + 批内并发） | ✅ 已量（24 张：端到端 **2.83 s**，**95 ms/张**，每张传输 43 KB。精度用同一批 24 张 A/B 量过：448/q88 vs 512 DIP/q100 是 **16/17 标签逐字相同**（唯一差异是一张界面截图里的临界角色），自解码 vs 系统取图是 **17/17 逐字相同**） |
 | Aves fork：打标中途断了，已保存的标签不丢 | ✅ 已验（一批一落盘 + 单批重试一次 + 连着 3 批失败才停。A/B：`tools\slow_proxy.py` 在第 1 批之后返回 503，电脑端同样回完 8 张 → 改前 `appTags` 新增 **0** 行、改后新增 **6** 行，且都以「完成：」收尾。另有两处防御性收口：`media_store_source.dart` 只在过期条目不超过库容 **1/4** 时才清 `appTags`，`MediaStoreImageProvider.kt` 把查询失败当「未知」而不是「空」——这两处**没有**造出真故障复现） |
-| 语义搜索（Chinese-CLIP） | ⚠️ **代码 + 单测 + 契约就位；模型没在本机导出过，真机没跑过**。代码在 `src/albumcat/semantic.py`、`/semantic` `/encode_text` `/semantic/model` 三个端点、Aves 侧 `app_vectors` 表（schema v18）与端侧文本塔；18 条 pytest 覆盖向量打包 / 余弦 / WordPiece 分词 / 缺模型降级；`tools/check_semantic.py` 22 项钉住降级路径（`available: false`、`/encode_text` 回 503 且不泄露 traceback、`/semantic/model` 只给两个文件）。**没有模型时打标完全照旧**。要变成「✅ 已验」得先按 [SEMANTIC](SEMANTIC.md) 导一次模型、跑一遍 `tools\serve_semantic_demo.py` 看排序是否合理 |
+| 语义搜索（Chinese-CLIP） | ⚠️ **代码 + 单测 + 契约就位，并且真的装到设备上跑过；模型没在本机导出过，所以「搜得准不准」没验**。代码在 `src/albumcat/semantic.py`、`/semantic` `/encode_text` `/semantic/model` 三个端点、Aves 侧 `appVectors` 表（schema **v18**）与端侧文本塔；18 条 pytest 覆盖向量打包 / 余弦 / WordPiece 分词 / 缺模型降级；`tools/check_semantic.py` 22 项钉住降级路径（`available: false`、`/encode_text` 回 503 且不泄露 traceback、`/semantic/model` 只给两个文件）。设备侧已验：**v17→v18 升级保住了 12 行旧标签**、打标页多出「语义搜索」按钮（库里没向量时是灰的）、打标流程不受影响。合并进来的代码原本 `flutter build` 过不去（`appVectorTable` 未声明、`String?` 当 `String`、`MainActivity.kt` 缺一个 import），已在 `7cfbf83` 修掉。要变成「✅ 已验」得先按 [SEMANTIC](SEMANTIC.md) 导一次模型、跑一遍 `tools\serve_semantic_demo.py` 看排序是否合理 |
 | 核心引擎（推理/规则/插件/发布/撤销） | ✅ 代码完成 |
 | 模型下载、依赖安装、DirectML 后端 | ✅ 就绪 |
 | 首次真实推理（预处理契约验证） | ✅ 通过（纯色/渐变图给出 `Monochrome`/`no Humans` 等应有标签） |
