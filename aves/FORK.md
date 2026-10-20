@@ -80,18 +80,25 @@ build-tools 36.0.0）。自己在设备上装的话，一份 debug APK 就够了
 `adb install` 直接能装）：
 
 ```powershell
-# 在本仓库根目录构建（-Platform 只影响传给 flutter 的 target-platform 参数）
-tools\aves_build.ps1 -Platform android-arm64
-tools\aves_build.ps1 -Platform android-x64
+# 在本仓库根目录构建（-Platform 原样传给 flutter 的 --target-platform）
+tools\aves_build.ps1 -Platform 'android-arm,android-arm64,android-x64'   # 通用包
+tools\aves_build.ps1 -Platform android-x64                              # 只在 x86_64 上能跑
 
 # 等价的手工命令（在 aves\ 目录里跑）
-flutter build apk --debug --flavor libre --target-platform android-arm64 -t lib/main_libre.dart
+flutter build apk --debug --flavor libre --target-platform android-arm,android-arm64,android-x64 -t lib/main_libre.dart
 # 产物：build\app\outputs\flutter-apk\app-libre-debug.apk
 ```
 
-⚠️ 实测：**debug libre 包会同时打进 arm64-v8a / armeabi-v7a / x86_64 三个 ABI**，
-`--target-platform` 对这份 debug 配置不起作用——两个 `-Platform` 构建出来的 APK 只差几 KB，
-功能上没有区别。所以真机和模拟器装同一个包就行（Release 里也只放一个）。
+⚠️ **`--target-platform` 决定的是「打包哪个 ABI 的 Flutter 引擎」，必须三个都传，否则真机一打开就崩**：
+插件库（onnxruntime、mpv、tiff、jpeg……）来自 AAR，三个 ABI 永远都在，所以 `-Platform android-x64`
+构建出来的包里 `lib/arm64-v8a/` 也有一堆 `.so`——但**没有 `libflutter.so`**。这种包装到 arm64
+手机上能装成功，一打开就退出（v0.3.0 / v0.4.0 就是这么坏的）。核对办法：
+
+```powershell
+python -c "import zipfile;print([i.filename for i in zipfile.ZipFile('build/app/outputs/flutter-apk/app-libre-debug.apk').infolist() if i.filename.endswith('libflutter.so')])"
+```
+
+三个 ABI 的 `libflutter.so` 都在，才是真机和模拟器都能装的通用包（约 380 MB）。
 
 几点注意：
 

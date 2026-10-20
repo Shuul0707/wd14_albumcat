@@ -7,8 +7,8 @@
 ## 构建
 
 ```
-tools\aves_build.ps1                                      # 构建（产物三种 ABI 都含）
-tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 同上，参数只是传给 flutter
+tools\aves_build.ps1 -Platform 'android-arm,android-arm64,android-x64'   # 通用包（发布用）
+tools\aves_build.ps1 -Platform android-x64                              # 只给模拟器，不要发布
 ```
 
 ⚠️ fork 的源码就在仓库的 `aves/` 下（[`deckerst/aves`](https://github.com/deckerst/aves) 的一份副本，
@@ -16,15 +16,24 @@ tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 同上，参数只�
 JDK 21 + Flutter 3.47.6，首次 `flutter build` 会自己生成 `android/gradlew` 与
 wrapper，这两个文件用不着入库。
 
-产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（当前 **273,361,264 B**；
+产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（通用包 **380,983,207 B**；
 debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都带进来了，加上
 `com.microsoft.onnxruntime:onnxruntime-android` 又把 `libonnxruntime.so` 塞进了三个 ABI ——
-合并语义搜索前是 198 MB，多出来的约 75 MB 就是 onnxruntime）。
+合并语义搜索前是 198 MB，多出来的约 75 MB 就是 onnxruntime；三套 Flutter 引擎各 33–40 MB
+是通用包的另一个大头）。
 
-⚠️ **一个包够用，不用挑 ABI**：实测 `--target-platform` 对 debug libre 不起作用，
-`-Platform android-x64` 和 `-Platform android-arm64` 构建出来的 APK 里
-都同时有 `lib/arm64-v8a/`、`lib/armeabi-v7a/`、`lib/x86_64/`，引擎和插件库都齐
-（两者只差几 KB，功能上没有区别）。所以真机和模拟器装同一个包就行，Releases 里也只放一个。
+⚠️ **必须把三个 target-platform 一起传，否则真机一打开就崩**：`--target-platform` 决定的是
+**把哪个 ABI 的 Flutter 引擎（`libflutter.so`、`libicu4x.so`）打进包里**。插件库（onnxruntime、
+mpv、tiff、jpeg……）来自 AAR，三个 ABI 永远都在 —— 所以只看目录名会以为包是通用的，其实
+`-Platform android-x64` 构建出来的 APK 里 `lib/arm64-v8a/` 只有 9 个插件库、**没有 `libflutter.so`**，
+装到 arm64 手机上能装成功、也能起进程，然后在加载 flutter 引擎时直接死掉（v0.3.0 / v0.4.0
+就是这样，用户报「打开之后就崩溃」）。核对办法：
+
+```powershell
+python -c "import zipfile;z=zipfile.ZipFile('aves/build/app/outputs/flutter-apk/app-libre-debug.apk');print([i.filename for i in z.infolist() if i.filename.endswith('libflutter.so')])"
+```
+
+三个 ABI 的 `libflutter.so` 都要出现，缺一个就说明这个包只能在指定的 ABI 上跑。
 
 国内网络下这条构建能跑通，靠的是三处已经落盘的镜像，不用再配：
 `~\.gradle\init.d\zz-mirrors.gradle`（Gradle 全局 init 脚本，把 `dl.google.com`、`repo1.maven.org`、
@@ -124,7 +133,7 @@ albumcat/
 │  ├─ check_plan_batch.py       /plan_batch 批量接口自检（自带一个临时服务端）
 │  ├─ make_aves_probe.py        把样例图拷成 4 张探针图（端到端验证用）
 │  ├─ make_alpha_probe.py       造一张带透明通道的 PNG，验证取图时透明像素被压成白底
-│  ├─ aves_build.ps1            构建 aves/ 的 APK（-Platform android-x64 / android-arm64）
+│  ├─ aves_build.ps1            构建 aves/ 的 APK（-Platform 可传多个 ABI，发布要三个都传）
 │  ├─ verify_aves_tags.py       Aves fork 端到端验证：探针文件哈希/时间戳不变 + appTags 逐文件断言
 │  ├─ phone_link.cmd            没有局域网时用数据线：adb reverse 把手机的 127.0.0.1:8899 接到电脑
 │  ├─ slow_proxy.py             假服务端：第 N 批之后开始返 503，用来量「中途断了会不会丢标签」
@@ -141,7 +150,7 @@ albumcat/
 ├─ models/vit/                  model.onnx + model_features.onnx + selected_tags.csv
 ├─ third_party/wd14-API-onnx/   上游项目（MIT），保留作参考实现
 ├─ aves/                        手机端 Aves 的 fork 源码（改了什么、怎么构建见 aves/FORK.md）
-├─ dist/                        构建好的 fork 安装包（arm64 给真机 / x64 给模拟器；不进仓库）
+├─ dist/                        构建好的 fork 安装包（通用包，三个 ABI 都带引擎；不进仓库）
 ├─ docs/evidence/               验证截图（按角色浏览、筛选、打标页）
 └─ .tmp/                        scratch：日志、拉下来的库、一次性脚本（不进仓库）
 ```
