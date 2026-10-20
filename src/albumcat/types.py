@@ -68,7 +68,9 @@ def split_series(key: str) -> tuple[str, str | None]:
     if not match:
         return key, None
     series = match.group(1).strip()
-    base = key[: match.start()].strip()
+    # WD14 spells the separator as an underscore, so peeling the parenthetical
+    # off leaves one behind: "hakurei_reimu_(touhou)" -> "hakurei_reimu_".
+    base = key[: match.start()].strip().rstrip("_").strip()
     if not base or not series:
         return key, None
     return base, series

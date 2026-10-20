@@ -4,6 +4,7 @@
 
 ![platform](https://img.shields.io/badge/手机端-Android-3ddc84)
 ![python](https://img.shields.io/badge/python-3.11%2B-3776ab)
+![license](https://img.shields.io/badge/license-MIT-blue)
 ![model](https://img.shields.io/badge/model-WD14%20vit--tagger--v2-ff69b4)
 ![app](https://img.shields.io/badge/相册-Aves%20fork-1f6feb)
 [![release](https://img.shields.io/github/v/release/Shuul0707/wd14_albumcat?label=release)](https://github.com/Shuul0707/wd14_albumcat/releases)
@@ -62,6 +63,9 @@ tools\install_deps.cmd             REM 建 .venv 并装依赖；默认 onnxrunti
 tools\albumcat.cmd doctor          REM 自检：模型、依赖、推理后端、插件
 tools\albumcat.cmd serve           REM 起手机要连的 HTTP 服务，默认 0.0.0.0:8899
 ```
+
+就这样跑最简单。想把它当包用（终端里直接 `albumcat`、能跑 `pytest`）：
+`pip install -e ".[dml,dev]"`，环境细节见 [参与开发](CONTRIBUTING.md)。
 
 先不碰手机，用本地图看效果：
 
@@ -151,8 +155,11 @@ src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / HTTP �
 aves/                手机端：Aves 的 fork 源码（标签存进它自己的 appTags 表）
 tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
 plugins/             插件目录（示例 + 训练产物）
+tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）
 docs/                延伸阅读与 UI 证据截图
 config.toml          全部配置项，注释齐全
+pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配置
+.github/workflows/   CI：pytest + 仓库卫生（Flutter 侧手动触发）
 ```
 
 完整目录树与验证脚本见 [开发与验证](docs/DEVELOPMENT.md)，fork 的构建方式见 [aves/FORK.md](aves/FORK.md)。
@@ -167,7 +174,8 @@ config.toml          全部配置项，注释齐全
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
-| [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建 |
+| [参与开发](CONTRIBUTING.md) | 环境、改完怎么验、代码风格、跟着上游升级、许可 |
+| [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建、怎么升上游 |
 
 ## 已知限制
 
@@ -181,8 +189,9 @@ config.toml          全部配置项，注释齐全
 
 ## 许可
 
-本仓库尚未选定许可证（补齐前请先开 issue 问一声）。使用的上游组件各有自己的条款：
+**MIT** —— 见 [LICENSE](LICENSE)：随便用、随便改、商用也行，保留版权声明就够。
+
+有一处范围要注意：`aves/` 是 [Aves](https://github.com/deckerst/aves) 的 fork，沿用上游
+**BSD 3-Clause**（源码在 [aves/](aves/FORK.md)，版权与许可证原文见 `aves/LICENSE`）。用到的其他上游组件：
 [wd14-API-onnx](https://github.com/bilebee/wd14-API-onnx)（MIT，用于核对预处理）、
-模型 [`wd-v1-4-vit-tagger-v2`](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2)（以模型页条款为准）、
-以及手机端：[Aves](https://github.com/deckerst/aves) 的 fork（**BSD 3-Clause**，源码在 [aves/](aves/FORK.md)，
-版权与许可证原文见 `aves/LICENSE`）。
+模型 [`wd-v1-4-vit-tagger-v2`](https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2)（以模型页条款为准）。

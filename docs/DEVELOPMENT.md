@@ -29,6 +29,22 @@ debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都
 `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn`、Android SDK 包从腾讯镜像装
 （`tools\setup_android.py` + `tools\sdk_install.py`；这条线上 `dl.google.com` 只有 21 KiB/s，腾讯镜像 26 MB/s）。
 
+⚠️ `tools\` 里的脚本以 Windows 为主：`*.cmd` 是 cmd.exe 的入口、`aves_build.ps1` 是 PowerShell、
+`firewall.py` 调 `netsh`。Linux / macOS 上 `python -m albumcat …` 与 pytest 都能跑，
+构建与设备脚本要自己翻译。
+
+## 自动检查（不用设备，也不用模型）
+
+```bat
+python -m pytest              REM 规则 / 标签字段 / 配置 / 类型的单元测试，不到一秒
+python tools\check_repo.py    REM 仓库卫生：*.cmd 纯 ASCII、疑似密钥、文档链接、.gitignore
+tools\check_all.cmd           REM 上面两条 + 四条端到端的全跑（要模型；最贵那条真的起一个 serve）
+```
+
+`check_all` 支持 `-k` 只跑名字匹配的检查（`tools\check_all.cmd -k firewall`）和 `--list` 看清单。
+CI 在 `.github/workflows/ci.yml`：push / PR 时跑 pytest、`check_repo.py`、`albumcat --help`（CPU 后端，
+runner 上没有 DX12）；Flutter 侧的分析 `.github/workflows/flutter.yml` 是手动触发的。
+
 ## 验证
 
 `tools\verify_aves_tags.py`（要模拟器 + `adb root`）：
@@ -72,7 +88,12 @@ UI 级证据（截图在 `docs\evidence\`）：
 ```
 albumcat/
 ├─ config.toml                  配置（见文件内注释）
-├─ requirements.txt
+├─ requirements.txt             依赖清单（等价于 pyproject 的 base + 一个 onnxruntime 变体）
+├─ pyproject.toml               可 `pip install -e ".[dml,dev]"`；pytest 配置也在这
+├─ LICENSE                      MIT（本仓库自己的代码；aves/ 沿用上游 BSD-3）
+├─ CONTRIBUTING.md              环境、验法、代码风格、上游升级
+├─ tests/                       pytest：规则 / 标签字段 / 配置 / 类型
+├─ .github/workflows/           ci.yml（pytest + 仓库卫生）、flutter.yml（手动）
 ├─ src/albumcat/
 │  ├─ tagger.py                 WD14 ONNX 推理（照抄上游预处理契约）
 │  ├─ rules.py                  规则引擎：分数 → 发布决策
@@ -98,6 +119,8 @@ albumcat/
 │  ├─ slow_proxy.py             假服务端：第 N 批之后开始返 503，用来量「中途断了会不会丢标签」
 │  ├─ check_all.cmd             一条命令跑全部自检（纯 ASCII 薄壳）
 │  ├─ check_all.py              自检清单本体，从便宜到贵排序
+│  ├─ check_repo.py             仓库卫生：*.cmd 纯 ASCII / 疑似密钥 / 文档链接 / .gitignore
+│  ├─ run_tests.py              给 check_all 用的 pytest 壳
 │  ├─ install_deps.cmd          依赖安装（建 venv + 清华源）
 │  ├─ allow_firewall.cmd        一键允许 8899 入站（会弹 UAC）
 │  ├─ albumcat.cmd              PC 端命令入口

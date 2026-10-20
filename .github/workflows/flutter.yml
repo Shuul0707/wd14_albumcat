@@ -1,0 +1,38 @@
+name: flutter
+
+# Manual only: a full Aves `flutter pub get` + analyze takes minutes and a big
+# download, so it does not run on every push. Trigger it from the Actions tab
+# when you touch aves/.
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aves
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: 分析 fork 里改过的 Dart 文件
+        run: |
+          dart analyze \
+            lib/model/app_tags.dart \
+            lib/services/ai_tagging_service.dart \
+            lib/widgets/dialogs/ai_tagging_page.dart \
+            lib/model/settings/modules/ai_tagging.dart \
+            lib/services/android_debug_service.dart \
+            lib/model/entry/extensions/metadata_edition.dart
+
+      - name: 上游自带的单元测试
+        run: flutter test test/model/filters_test.dart test/utils/string_utils_test.dart

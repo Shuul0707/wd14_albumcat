@@ -83,3 +83,30 @@ flutter build apk --debug --flavor libre --target-platform android-arm64 -t lib/
 - 出 **release** APK 需要自己的签名：把 `android/key_template.properties` 复制成
   `android/key.properties` 并填好，否则 release 产物是未签名的、装不上。本项目的 Release 里放的是
   debug APK，就是为了让任何人都能直接装。
+
+## 上游升级怎么跟
+
+`aves/` 是整棵源码树的副本（没有 `.git`），所以升级是「拿上游新版本，把我们那 30 来个文件的改动搬过去」，
+不是一条 `git rebase`。顺序：
+
+1. **先记基线**。现在是 `deckerst/aves` 的 `develop` @ `f3cbe6e1`、应用版本 `1.15.5+179`（见本文件开头）。
+   每升一次就把它改成新值，否则下次没人知道「差异是相对谁算的」。
+2. **取上游新版**：`git clone https://github.com/deckerst/aves .tmp/aves-upstream`，
+   `git -C .tmp/aves-upstream checkout <新 tag 或 commit>`。
+3. **看差异落在哪**：`git diff --no-index --stat aves/ .tmp/aves-upstream/` 先给全貌。我们改过、上游没动的文件
+   直接拷过去；两边都动过的手工合——数据库、`pubspec`、`android/` 三处几乎必然两边都动。
+4. **最容易撞的三处**：
+   - **数据库版本号**：`lib/model/db/db_sqflite_upgrade.dart` 里我们是 `case 16 -> _upgradeFrom16`，schema 到 v17。
+     上游要是自己占了 17，就把我们的迁移改号，并确认老用户从任意旧版本到新版本的迁移链仍然连续。
+   - **`pubspec.yaml` / `pubspec.lock`**：我们的 `dependency_overrides`（`image` 钉 4.10.1）是照着上游 libre 的
+     lock 组合出来的，上游一升可能整段作废，别硬搬，重新解一遍冲突。
+   - **`android/`**：Aliyun 镜像、`kotlin.incremental=false`、删掉的 `org.gradle.java.home`、停用的
+     `gradle-daemon-jvm.properties` 都是本机/国内网络补丁，上游不会带，也不该指望它带。
+5. **改完必须重验，一步都不能省**：`dart analyze` 干净 → `tools\aves_build.ps1 -Platform android-x64` 出包 →
+   装到模拟器 → `tools\verify_aves_tags.py verify` 11/11。换版本、换设备，验的东西都要重验一遍。
+6. **顺手更新两份文档**：本文件顶部的基线与「相对上游改了什么」的表，以及仓库根 `docs/STATUS.md` 里
+   「fork 基于上游 Aves 1.15.5」那一行。
+
+留个可选做法：如果你更想要「干净上游 + 补丁」的形态，可以把每次搬完的改动导出成 patch
+（`git diff --no-index aves/ .tmp/aves-upstream/ > .tmp/fork.patch`，别提交进仓库），
+下次升级先 `git apply --3way` 试一遍，比人肉比对省事。

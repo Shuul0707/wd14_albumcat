@@ -5,9 +5,11 @@ Usage:
     python tools\\check_all.py -k firewall     only the ones whose name matches
     python tools\\check_all.py --list
 
-Four checks, one per thing the docs claim -- and nothing else, because these are
+Six checks, one per thing the docs claim -- and nothing else, because these are
 the paths that are actually wired up:
 
+  * repository hygiene (pure ASCII .cmd, no secrets, doc links resolve)
+  * the unit tests (rules, tag fields, config, types): no model, no GPU
   * the feature plugin chain (a head is trained, written, loaded back)
   * the firewall preflight parser (English + Chinese netsh output)
   * the environment (`albumcat doctor`: model, packages, backend)
@@ -39,6 +41,10 @@ TMP = ROOT / ".tmp"
 # (label, argv-from-repo-root).  Ordered cheapest-first so an obvious breakage
 # shows up in seconds rather than after the ONNX model has loaded twice.
 CHECKS: list[tuple[str, list[str]]] = [
+    ("仓库卫生（ASCII .cmd / 密钥 / 文档链接 / .gitignore）",
+     ["tools/check_repo.py"]),
+    ("单元测试（规则 / 标签字段 / 配置 / 类型）",
+     ["tools/run_tests.py"]),
     ("feature 插件链路（768 维 ONNX head）",
      ["tools/check_feature_plugin.py"]),
     ("防火墙 preflight 的 netsh 解析（中英双语）",
@@ -202,8 +208,8 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print("=" * width)
     if not bad:
-        print(f"  全部 {len(ok)} 项通过 —— 插件链路、防火墙预检、环境自检和 "
-              f"/plan_batch 契约都在真实的代码上验过了。")
+        print(f"  全部 {len(ok)} 项通过 —— 仓库卫生、单元测试、插件链路、防火墙预检、"
+              f"环境自检和 /plan_batch 契约都在真实的代码上验过了。")
         return 0
 
     print(f"  {len(ok)} 项通过，{len(bad)} 项失败：")

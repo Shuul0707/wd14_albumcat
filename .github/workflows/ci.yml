@@ -1,0 +1,41 @@
+name: ci
+
+# Fast, deterministic checks that need neither the model nor a GPU nor a phone.
+# The Flutter side is separate (flutter.yml, manual) because pulling the Flutter
+# SDK on every push costs more minutes than it catches bugs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: 安装（CPU 后端 —— CI 没有 DX12）
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[cpu,dev]"
+
+      - name: 单元测试（规则 / 字段映射 / 配置 / 类型）
+        run: python -m pytest
+
+      - name: 仓库卫生（ASCII .cmd、密钥、文档链接、.gitignore）
+        run: python tools/check_repo.py
+
+      - name: 命令行真的能起来
+        run: |
+          python -m albumcat --help
+          python -m albumcat plugins

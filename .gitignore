@@ -18,15 +18,13 @@ samples/
 data/
 
 # build outputs: the Aves fork's APK is a build artifact, not a source --
-# publish it as a GitHub Release asset instead
+# publish it as a GitHub Release asset instead. dist/ also holds the course
+# slide deck (and its PDF), whose docProps carry a real author name: scrub
+# those before publishing anything from there.
 build/
-dist/*.apk
+dist/
 *.apk
 *.aab
-
-# course slide deck: its docProps carry a real author name and every slide
-# names the speakers. Scrub those before publishing it here.
-dist/*.pptx
 
 # signing material, if you ever add it
 *.keystore

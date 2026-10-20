@@ -14,6 +14,7 @@
 | Aves fork：构建（x64 / arm64） | ✅ 通过（`tools\aves_build.ps1`，源码就是仓库里的 `aves/`；x64 约 188 MB、arm64 约 204 MB，均已解包确认引擎 ABI 与包名匹配） |
 | Aves fork：真机安装 | ⏳ arm64 包已构建好，等真机装上跑一轮 |
 | 发布 | ✅ [Releases v0.1.0](https://github.com/Shuul0707/wd14_albumcat/releases/tag/v0.1.0) 里放着两个 APK。干净安装（先卸载、再装 release 包、走完首启授权）后跑一轮：**12 张全部打上标签、0 失败**，`tools\verify_aves_tags.py` 11/11 |
+| 工程化：许可 / 安装 / CI / 单测 | ✅ 已补（MIT [LICENSE](../LICENSE)、`pip install -e ".[dml,dev]"` 与 `albumcat` 命令、**59 条 pytest** 覆盖规则与标签字段映射、GitHub Actions 每次 push 跑 pytest + 仓库卫生；Flutter 侧分析手动触发。`tools/check_repo.py` 会盯住「`*.cmd` 必须纯 ASCII」这类已经踩过的坑） |
 | Aves fork：没有局域网时走数据线 | ✅ 已验（`tools\phone_link.cmd` = `adb reverse tcp:8899 tcp:8899`；App 侧 `resolveReachable()` 先探填的地址再退回 `http://127.0.0.1:8899`。模拟器上把发往电脑 `10.0.2.2:8899` 的出站流量 `REJECT` 掉后，25 张仍 19 写 / 0 失败，日志写「电脑端在数据线上」；删规则后又变回局域网、3.1 s。真 USB 电缆本身没验，adb 在模拟器上走 loopback） |
 | Aves fork：打标提速（自解码 448px + q88 + 批内并发） | ✅ 已量（24 张：端到端 **2.83 s**，**95 ms/张**，每张传输 43 KB。精度用同一批 24 张 A/B 量过：448/q88 vs 512 DIP/q100 是 **16/17 标签逐字相同**（唯一差异是一张界面截图里的临界角色），自解码 vs 系统取图是 **17/17 逐字相同**） |
 | Aves fork：打标中途断了，已保存的标签不丢 | ✅ 已验（一批一落盘 + 单批重试一次 + 连着 3 批失败才停。A/B：`tools\slow_proxy.py` 在第 1 批之后返回 503，电脑端同样回完 8 张 → 改前 `appTags` 新增 **0** 行、改后新增 **6** 行，且都以「完成：」收尾。另有两处防御性收口：`media_store_source.dart` 只在过期条目不超过库容 **1/4** 时才清 `appTags`，`MediaStoreImageProvider.kt` 把查询失败当「未知」而不是「空」——这两处**没有**造出真故障复现） |

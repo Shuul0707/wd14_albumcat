@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "albumcat"
+version = "0.1.0"
+description = "Tag an Android photo library with WD14 and browse it by character in a forked Aves"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Shuul0707" }]
+keywords = ["wd14", "danbooru", "tagger", "onnx", "aves", "android", "photo-album"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+]
+
+# Runtime dependencies only. The ONNX runtime is an extra on purpose: every
+# variant (directml / gpu / cpu) provides the same `onnxruntime` module and they
+# conflict with each other, so the machine picks exactly one:
+#   pip install -e ".[dml]"     Windows + any DX12 GPU   (what we ship)
+#   pip install -e ".[cuda]"    NVIDIA + CUDA 12.x
+#   pip install -e ".[cpu]"     anything else, slower
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "pandas>=2.0",
+    "opencv-python-headless>=4.8",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dml = ["onnxruntime-directml>=1.20"]
+cuda = ["onnxruntime-gpu>=1.20"]
+cpu = ["onnxruntime>=1.20"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+albumcat = "albumcat.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Shuul0707/wd14_albumcat"
+Source = "https://github.com/Shuul0707/wd14_albumcat"
+Releases = "https://github.com/Shuul0707/wd14_albumcat/releases"
+Issues = "https://github.com/Shuul0707/wd14_albumcat/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:albumcat.*"]
