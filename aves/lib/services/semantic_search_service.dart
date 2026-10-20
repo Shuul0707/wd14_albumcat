@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/services/ai_tagging_service.dart';
+import 'package:aves/services/on_device_text_encoder.dart';
 import 'package:http/http.dart' as http;
 
 /// One search result: the photo and how close it is (cosine, 0..1).
@@ -28,13 +29,22 @@ class SemanticSearchService {
 
   static String? get activeModel => appVectors.models.isEmpty ? null : appVectors.models.first;
 
-  /// Encode one phrase. Asks for float32 so it drops straight into a
-  /// [Float32List] without a half-float decoder on our side.
+  /// Encode one phrase.
+  ///
+  /// Prefers the on-device text tower when it is installed (no network, works
+  /// with the PC off); otherwise asks the PC for a vector in float32 so it
+  /// drops straight into a [Float32List] without a half-float decoder.
   static Future<Float32List> encodeQuery(
     String text, {
     required String server,
     String token = '',
+    bool preferOnDevice = true,
   }) async {
+    if (preferOnDevice && OnDeviceTextEncoder.isLoaded) {
+      final local = await OnDeviceTextEncoder.encode(text);
+      if (local != null) return local;
+    }
+
     final base = AiTaggingService.normalizeServer(server);
     final http.Response response;
     try {

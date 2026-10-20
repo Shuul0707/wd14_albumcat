@@ -22,6 +22,9 @@ kotlinxCoroutines = "1.11.0"
 ksp = "2.3.8"
 material = "1.14.0"
 metadataExtractor = "2.21.0"
+# on-device Chinese-CLIP text tower (semantic search). The AAR adds ~15 MB to the
+# APK; the model itself is downloaded on first use, never bundled.
+onnxRuntime = "1.20.0"
 mp4parser = "c2898f1832"
 pixymeta = "f4513291b7"
 slf4j = "2.0.20"
@@ -55,6 +58,7 @@ junit = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "juni
 kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
+onnx-runtime = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxRuntime" }
 slf4j = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 
 [plugins]

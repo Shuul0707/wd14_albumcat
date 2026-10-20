@@ -380,6 +380,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/semantic":
             self._send(200, self.service.semantic_info())
             return
+        if path == "/semantic/model":
+            self._send_model()
+            return
         self._error(404, f"no such endpoint: {path}")
 
     def do_POST(self) -> None:  # noqa: N802
@@ -440,6 +443,39 @@ class _Handler(BaseHTTPRequestHandler):
             include_vector=bool(obj.get("include_vector", False)),
             vector_dtype=(str(obj["vector_dtype"]) if obj.get("vector_dtype") else None),
         )
+
+    def _send_model(self) -> None:
+        """Stream one model file to the phone, which keeps its own copy.
+
+        Only the two text-tower files are served: the phone never runs the
+        image tower, and handing out 300 MB over the LAN should not be a
+        one-liner either.
+        """
+        if not self._authed():
+            self._error(401, "bad or missing X-Albumcat-Token")
+            return
+        allowed = {"text_encoder.onnx", "vocab.txt"}
+        name = (self._query().get("file") or ["text_encoder.onnx"])[0]
+        if name not in allowed:
+            self._error(400, f"only {sorted(allowed)} can be served")
+            return
+        path = self.service.config.semantic.path / name
+        if not path.exists():
+            self._error(404, f"not found: {name} (run tools/export_chinese_clip_onnx.py)")
+            return
+
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("X-Albumcat-File", name)
+        self.end_headers()
+        with open(path, "rb") as fh:
+            while True:
+                chunk = fh.read(1 << 20)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
     def _handle_encode_text(self, raw: bytes) -> dict:
         """POST /encode_text  {"text": "沙滩"}  -> one unit vector."""

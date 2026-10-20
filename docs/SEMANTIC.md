@@ -123,7 +123,7 @@ curl http://127.0.0.1:8899/semantic
 ```bash
 curl -X POST http://127.0.0.1:8899/encode_text \
   -H "Content-Type: application/json" \
-  -d '{"text": "沙滩"}'
+  -d '{"text": "沙滩", "dtype": "float32"}'
 ```
 
 ```json
@@ -131,13 +131,17 @@ curl -X POST http://127.0.0.1:8899/encode_text \
   "ok": true,
   "model": "chinese-clip-vit-base-patch16",
   "dim": 512,
-  "dtype": "float16",
-  "vector": "…base64(float16)…",
+  "dtype": "float32",
+  "vector": "…base64(float32)…",
   "ms": 38.2
 }
 ```
 
-文本塔未安装时返回 **503**，`error` 说明原因。
+文本塔未安装时返回 **503**，`error` 说明原因。`dtype` 可选（默认取配置里的 float16），手机要 `float32` 是为了能直接内存映射。
+
+### `GET /semantic/model?file=text_encoder.onnx`
+
+把文本塔 / 词表以 `application/octet-stream` 流式发给手机（只允许 `text_encoder.onnx` 与 `vocab.txt`，图像塔不提供）。需要 `X-Albumcat-Token`。手机端「下载到本机」用的就是它。
 
 ### `POST /plan` / `/plan_batch` 增加 `include_vector`
 
@@ -186,17 +190,18 @@ CREATE TABLE appVectors(
 
 性能：1 万条 512 维点积在手机上约 5–15 ms，搜索本身不是瓶颈，**编码才是**。
 
-### 端侧文本塔（可选）
+### 端侧文本塔（已实现）
 
-Aves 的 Android 侧已经有 `onnxruntime` 可用（Flutter 通过 platform channel）：
+`TextEncoderHandler.kt` 在设备上跑 `text_encoder.onnx`：
 
-- 把 `text_encoder.onnx`（int8，~100 MB）与 `vocab.txt` 放进 assets，或首次启动时下载；
-- 输入 `input_ids` / `attention_mask` / `token_type_ids`（int64，`[1, 52]`）；
-- 输出 512 维，**必须做 L2 归一化**（与 PC 侧 `_l2_normalize` 一致，否则余弦会被长度带偏）；
-- 中文分词规则见 `src/albumcat/semantic.py` 的 `BertTokenizer`（按字切分 + 全角折叠 + WordPiece）。
+- **模型从哪来**：不打包进 APK（约 100 MB 权重会让安装包膨胀一倍，也违背「仓库不存权重」）。首次点「下载到本机」时从电脑 `GET /semantic/model?file=` 拉到 App 私有目录（`files/semantic/`），之后复用。下载先写 `.part`、校验字节数再改名，避免半截文件被当成完整模型。
+- **分词**：Kotlin 里的 BERT WordPiece 与 `semantic.py::BertTokenizer` 逐条对齐——中文按字切分、全角折叠、`##` 续接、截断时保留 `[SEP]`。两份实现若不同步，向量看着正常但排序是噪声，所以两处都写了指向对方的注释。
+- **输入输出**：`input_ids` / `attention_mask` / `token_type_ids`，int64 `[1, 52]`；输出 `[1, 512]`，**L2 归一化在原生侧做**（与 PC 的 `_l2_normalize` 一致）。
+- **失败回落**：端侧未加载或调用异常 → 自动走 `/encode_text`，搜索不会因此不可用。UI 上会标出当前是「本机编码」还是「电脑编码」。
+- **代价**：APK 增加 `onnxruntime-android` AAR（约 15 MB）；首次下载约 100 MB；每次查询约 200 ms（CPU + int8）。
+- **好处**：装上之后搜索不需要电脑在线，也不需要局域网。
 
-> 手机端是否值得内置 100 MB 的文本塔，是个取舍：内置 = 完全离线、每次搜索 200 ms；
-> 不内置 = 依赖电脑在线，但省 100 MB。项目本来就要求电脑开着，所以**先做「调 `/encode_text`」，端侧作为可选增强**。
+> 图像塔仍然只能在电脑上跑：ViT-B/16 一张 1–3 秒，一万张 6–14 小时。所谓「手机部署」，实际是**把文本塔放到手机、图像塔留在电脑**——这也是打标和建索引本来就要开机的那段时间。
 
 ---
 

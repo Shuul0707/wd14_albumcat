@@ -3,6 +3,7 @@ import 'dart:ui' show FontFeature;
 import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/services/ai_tagging_service.dart';
+import 'package:aves/services/on_device_text_encoder.dart';
 import 'package:aves/services/semantic_search_service.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -34,6 +35,46 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
   bool _running = false;
   String? _error;
   bool _searched = false;
+
+  /// true once the on-device text tower is loaded (search then works offline)
+  bool _local = false;
+  bool _installing = false;
+  double _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocalEncoder();
+  }
+
+  Future<void> _initLocalEncoder() async {
+    if (!await OnDeviceTextEncoder.isInstalled()) return;
+    final ok = await OnDeviceTextEncoder.load();
+    if (!mounted) return;
+    setState(() => _local = ok);
+  }
+
+  Future<void> _installLocalEncoder() async {
+    setState(() {
+      _installing = true;
+      _progress = 0;
+      _error = null;
+    });
+    OnDeviceTextEncoder.onInstallProgress = (value) {
+      if (mounted) setState(() => _progress = value);
+    };
+    try {
+      await OnDeviceTextEncoder.install(server: widget.server, token: widget.token);
+      if (!mounted) return;
+      setState(() => _local = OnDeviceTextEncoder.isLoaded);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = AiTaggingService.describeError(error));
+    } finally {
+      OnDeviceTextEncoder.onInstallProgress = null;
+      if (mounted) setState(() => _installing = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -93,7 +134,31 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                   : '已为 $total 张照片建立向量。试试「沙滩」「雨天的街道」「教室」。',
               style: theme.textTheme.bodySmall,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(
+                  _local ? Icons.offline_bolt : Icons.cloud_queue,
+                  size: 14,
+                  color: _local ? theme.colorScheme.primary : theme.textTheme.bodySmall?.color,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    _local ? '本机编码：断网也能搜' : '电脑编码：需要电脑在线',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                if (!_local)
+                  TextButton(
+                    onPressed: _installing || total == 0 ? null : _installLocalEncoder,
+                    child: Text(
+                      _installing ? '下载中 ${(_progress * 100).round()}%' : '下载到本机',
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
