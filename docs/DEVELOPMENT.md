@@ -7,8 +7,8 @@
 ## 构建
 
 ```
-tools\aves_build.ps1                                      # 模拟器 x86_64
-tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 真机 arm64
+tools\aves_build.ps1                                      # 构建（产物三种 ABI 都含）
+tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 同上，参数只是传给 flutter
 ```
 
 ⚠️ fork 的源码就在仓库的 `aves/` 下（[`deckerst/aves`](https://github.com/deckerst/aves) 的一份副本，
@@ -16,14 +16,15 @@ tools\aves_build.ps1 -Platform android-arm64 -NoVerbose    # 真机 arm64
 JDK 21 + Flutter 3.47.6，首次 `flutter build` 会自己生成 `android/gradlew` 与
 wrapper，这两个文件用不着入库。
 
-产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（x64 273,024,120 B、arm64 273,024,261 B；
+产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（当前 **273,361,264 B**；
 debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都带进来了，加上
 `com.microsoft.onnxruntime:onnxruntime-android` 又把 `libonnxruntime.so` 塞进了三个 ABI ——
-合并语义搜索前这两个包还是 188 / 204 MB，多出来的约 75 MB 就是 onnxruntime）。
+合并语义搜索前是 198 MB，多出来的约 75 MB 就是 onnxruntime）。
 
-⚠️ **ABI 必须选对**：`-Platform android-x64` 的包里只有 `lib/x86_64/libflutter.so`，
-`-Platform android-arm64` 的包里只有 `lib/arm64-v8a/libflutter.so`；两者的另一套 ABI 只有插件库、
-**没有 Flutter 引擎**，装到不匹配的设备上起不来。所以真机用 arm64 那个包，模拟器用 x64 那个包。
+⚠️ **一个包够用，不用挑 ABI**：实测 `--target-platform` 对 debug libre 不起作用，
+`-Platform android-x64` 和 `-Platform android-arm64` 构建出来的 APK 里
+都同时有 `lib/arm64-v8a/`、`lib/armeabi-v7a/`、`lib/x86_64/`，引擎和插件库都齐
+（两者只差几 KB，功能上没有区别）。所以真机和模拟器装同一个包就行，Releases 里也只放一个。
 
 国内网络下这条构建能跑通，靠的是三处已经落盘的镜像，不用再配：
 `~\.gradle\init.d\zz-mirrors.gradle`（Gradle 全局 init 脚本，把 `dl.google.com`、`repo1.maven.org`、

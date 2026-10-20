@@ -13,7 +13,7 @@
 | Aves fork：纯 App 标签绝不会写进照片 | ✅ 代码闸门 + 调用点改造（`metadata_edition.dart` 的 `editTags()` 把只存在于 appTags 的标签从待写入集合里剔掉，所有回写 UI 改读 `fileTags`；显示/筛选仍读并集），`dart analyze` 干净 |
 | Aves fork：构建（x64 / arm64） | ✅ 通过（`tools\aves_build.ps1`，源码就是仓库里的 `aves/`；x64 **273,024,120 B**、arm64 **273,024,261 B**，均已解包确认引擎 ABI 与包名匹配。比合并语义搜索前大约 75 MB，是因为 `com.microsoft.onnxruntime:onnxruntime-android` 把 `libonnxruntime.so` 打进了三个 ABI） |
 | Aves fork：真机安装 | ⏳ arm64 包已构建好，等真机装上跑一轮 |
-| 发布 | ✅ [Releases v0.2.0](https://github.com/Shuul0707/wd14_albumcat/releases/tag/v0.2.0) 里放着两个 APK（含语义搜索与数据线回退）。干净安装（先卸载、再装 release 包、走完首启授权）后跑一轮：**12 张全部打上标签、0 失败**，`tools\verify_aves_tags.py` 12/12 |
+| 发布 | ✅ [Releases v0.4.0](https://github.com/Shuul0707/wd14_albumcat/releases/tag/v0.4.0) 里一个 **通用 APK**（273,361,264 B，内含 arm64-v8a / armeabi-v7a / x86_64，debug 签名，含语义搜索并入原生搜索框与数据线回退）。干净安装（先卸载、再装 release 包、走完首启授权）后跑一轮：**12 张全部打上标签、0 失败**，`tools\verify_aves_tags.py` 12/12；v0.2.0 的两个分包已被这个通用包取代 |
 | 工程化：许可 / 安装 / CI / 单测 | ✅ 已补（MIT [LICENSE](../LICENSE)、`pip install -e ".[dml,dev]"` 与 `albumcat` 命令、**77 条 pytest** 覆盖规则 / 标签字段 / 配置 / 语义向量、GitHub Actions 每次 push 跑 pytest + 仓库卫生；Flutter 侧分析手动触发。`tools/check_all.py` 是 **7 项**一条命令：仓库卫生、单测、插件链路、防火墙预检、环境自检、语义搜索契约、`/plan_batch` 契约） |
 | Aves fork：没有局域网时走数据线 | ✅ 已验（`tools\phone_link.cmd` = `adb reverse tcp:8899 tcp:8899`；App 侧 `resolveReachable()` 先探填的地址再退回 `http://127.0.0.1:8899`。模拟器上把发往电脑 `10.0.2.2:8899` 的出站流量 `REJECT` 掉后，25 张仍 19 写 / 0 失败，日志写「电脑端在数据线上」；删规则后又变回局域网、3.1 s。真 USB 电缆本身没验，adb 在模拟器上走 loopback） |
 | Aves fork：打标提速（自解码 448px + q88 + 批内并发） | ✅ 已量（24 张：端到端 **2.83 s**，**95 ms/张**，每张传输 43 KB。精度用同一批 24 张 A/B 量过：448/q88 vs 512 DIP/q100 是 **16/17 标签逐字相同**（唯一差异是一张界面截图里的临界角色），自解码 vs 系统取图是 **17/17 逐字相同**） |
