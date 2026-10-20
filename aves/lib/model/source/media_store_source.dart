@@ -183,6 +183,9 @@ class MediaStoreSource extends CollectionSource {
         debugPrint('$runtimeType keeping app tags of ${removedEntries.length} of $considered removed entries (mass removal, looks like a hiccup)');
       } else {
         await appTags.removeIds(removedIds);
+        // Unlike tags, a vector is fully reconstructible from the photo, so a
+        // stale row here is only wasted bytes -- same reasoning, same branch.
+        await appVectors.removeIds(removedIds);
       }
     }
 

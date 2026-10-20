@@ -152,8 +152,8 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 ## 项目结构
 
 ```text
-src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / HTTP 服务 / 命令行
-aves/                手机端：Aves 的 fork 源码（标签存进它自己的 appTags 表）
+src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / Chinese-CLIP / HTTP 服务 / 命令行
+aves/                手机端：Aves 的 fork 源码（标签与语义向量存进它自己的 appTags / appVectors 表）
 tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
 plugins/             插件目录（示例 + 训练产物）
 tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）

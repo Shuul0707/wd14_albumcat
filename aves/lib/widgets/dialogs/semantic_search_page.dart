@@ -82,6 +82,23 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
     super.dispose();
   }
 
+  /// Re-rank by one result's own vector: "more like this".
+  ///
+  /// No text encoding involved, so it stays responsive and works with the
+  /// computer off — the only cost is the first matrix build.
+  void _similarTo(SemanticHit hit) {
+    final byId = {for (final entry in widget.entries) entry.id: entry};
+    final hits = appVectors.similarTo(hit.entry.id, limit: 60);
+    setState(() {
+      _hits = [
+        for (final neighbour in hits)
+          if (byId[neighbour.entryId] != null) SemanticHit(byId[neighbour.entryId]!, neighbour.score),
+      ];
+      _searched = true;
+      _error = null;
+    });
+  }
+
   Future<void> _search() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _running) return;
@@ -207,11 +224,22 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          trailing: Text(
-                            hit.score.toStringAsFixed(3),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                hit.score.toStringAsFixed(3),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.center_focus_strong, size: 18),
+                                tooltip: '找相似的',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _similarTo(hit),
+                              ),
+                            ],
                           ),
                         );
                       },

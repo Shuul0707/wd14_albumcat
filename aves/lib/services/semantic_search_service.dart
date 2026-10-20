@@ -27,7 +27,7 @@ class SemanticSearchService {
   /// `true` when there is anything to search at all.
   static bool get hasVectors => appVectors.entryCount > 0;
 
-  static String? get activeModel => appVectors.models.isEmpty ? null : appVectors.models.first;
+  static String? get activeModel => appVectors.dominantModel;
 
   /// Encode one phrase.
   ///

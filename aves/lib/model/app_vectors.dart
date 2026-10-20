@@ -33,6 +33,25 @@ class AppVectors with ChangeNotifier {
   /// Distinct model ids present, so the UI can warn about a half-migrated store.
   Set<String> get models => _byEntry.values.map((v) => v.model).toSet();
 
+  /// The model most rows belong to.
+  ///
+  /// After swapping the image tower the store is briefly a mix of old and new
+  /// vectors. Searching must pick *one* space — comparing a query against both
+  /// would rank half the library by noise — so we go with the majority and the
+  /// stragglers simply do not appear until they are re-encoded.
+  String? get dominantModel {
+    if (_byEntry.isEmpty) return null;
+    final counts = <String, int>{};
+    for (final vector in _byEntry.values) {
+      counts[vector.model] = (counts[vector.model] ?? 0) + 1;
+    }
+    var best = counts.entries.first;
+    for (final entry in counts.entries) {
+      if (entry.value > best.value) best = entry;
+    }
+    return best.key;
+  }
+
   new _private() {
     if (kFlutterMemoryAllocationsEnabled) ChangeNotifier.maybeDispatchObjectCreation(this);
   }
@@ -113,6 +132,19 @@ class AppVectors with ChangeNotifier {
 
     hits.sort((a, b) => b.score.compareTo(a.score));
     return hits.length > limit ? hits.sublist(0, limit) : hits;
+  }
+
+  /// Rank the library by similarity to one entry's own vector.
+  ///
+  /// This is the cheap half of search: the query vector already exists, so it
+  /// is a matrix-vector product with no encoding step, no network and no
+  /// model — which is why it works even when the PC is off.
+  List<VectorHit> similarTo(int entryId, {int limit = 60, double minScore = 0.15}) {
+    final vector = _byEntry[entryId];
+    if (vector == null) return const [];
+    final query = vector.decode();
+    final hits = nearest(query, model: vector.model, limit: limit + 1, minScore: minScore);
+    return hits.where((hit) => hit.entryId != entryId).take(limit).toList();
   }
 
   // -- internals ------------------------------------------------------- #

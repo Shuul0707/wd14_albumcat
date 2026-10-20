@@ -16,6 +16,8 @@
 | `lib/model/db/db_sqflite_upgrade.dart` | schema 16 → 17，`_upgradeFrom16` 只建表，不动老数据 |
 | `lib/model/db/db.dart` / `db_sqflite.dart` | `openDatabase(..., version: 17)`；新接口 `loadAppTags` / `saveAppTags` / `removeAppTags` / `clearAppTags`，写用 `_db.batch()` + `ConflictAlgorithm.replace`，读用 `queryCursor(bufferSize: 1000)` |
 | `lib/model/app_tags.dart`（新） | 全局单例 `AppTags`（`ChangeNotifier`），内存里 `_byEntry`，标签分隔符 `';'`，带 `generation` 计数器给 UI 做缓存失效 |
+| `lib/model/db/db_sqflite_schema.dart`（语义） | 新表 `appVectors(id, model, dim, vector, updated)`，加进 `allTables`；schema 17 → 18，只建表不动老数据 |
+| `lib/model/app_vectors.dart`（新） | 全局单例 `AppVectors`，把全库向量拼成一张 `N×dim` 矩阵，`nearest()` 做余弦 top-k；`model` 随行存，换图像塔后不与旧向量混算 |
 | `lib/model/entry/entry.dart` | `fileTags` = 只来自文件的 `dc:subject`；`tags` = `fileTags` ∪ `appTags.tagsOf(id)` |
 | `lib/model/entry/extensions/metadata_edition.dart` | ★ 闸门：`editTags()` 把「只存在于 appTags 的标签」从待写入集合里剔掉 |
 
