@@ -139,6 +139,39 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     else:
         print("  disabled in config")
 
+    print("\nsemantic (optional)")
+    if not cfg.semantic.enabled:
+        print("  disabled in config ([semantic] enabled = false)")
+    else:
+        directory = cfg.semantic.path
+        missing: list[str] = []
+        for label, name in (
+            ("image_encoder", cfg.semantic.image_model),
+            ("text_encoder ", cfg.semantic.text_model),
+            ("vocab        ", cfg.semantic.vocab_file),
+        ):
+            path = directory / name
+            if path.exists():
+                print(f"  [ok]   {label} {path.stat().st_size / 1e6:9.1f} MB")
+            else:
+                missing.append(name)
+                print(f"  [--]   {label} missing   {path}")
+        if not missing:
+            from .semantic import SemanticEncoder
+
+            # Presence is not the same as "it loads": an ONNX exported for a
+            # different opset or a truncated download fails here, and doctor is
+            # the right place to find that out instead of the first query.
+            info = SemanticEncoder(cfg.semantic).info()
+            if info.available:
+                print(f"  -> {info.model}, {info.dim}-d vectors as {info.dtype}")
+            else:
+                print(f"  [WARN] files are present but the towers did not load: {info.reason}")
+        else:
+            print("  -> off: free-form search needs those three files;")
+            print(r"     build them once with: python tools\export_chinese_clip_onnx.py")
+            print("     (tagging is unaffected -- GET /semantic reports available: false)")
+
     print("\nphone")
     from .firewall import preflight
     from .server import _lan_ips

@@ -20,6 +20,7 @@ class LocalMediaDbUpgrader {
   static const videoPlaybackTable = SqfliteLocalMediaDbSchema.videoPlaybackTable;
   static const debugTable = SqfliteLocalMediaDbSchema.debugTable;
   static const appTagTable = SqfliteLocalMediaDbSchema.appTagTable;
+  static const appVectorTable = SqfliteLocalMediaDbSchema.appVectorTable;
 
   // warning: "ALTER TABLE ... RENAME COLUMN ..." is not supported
   // on SQLite <3.25.0, bundled on older Android devices

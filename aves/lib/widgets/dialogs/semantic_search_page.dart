@@ -220,7 +220,7 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                         return ListTile(
                           dense: true,
                           title: Text(
-                            hit.entry.bestTitle,
+                            hit.entry.bestTitle ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

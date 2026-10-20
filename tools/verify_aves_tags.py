@@ -198,8 +198,25 @@ def pull_db(device, pkg):
     return got
 
 
+def expected_schema_version(default=18):
+    """The fork's schema version, read from the Dart source instead of hardcoded.
+
+    This check used to assert `== 17`, which turned a *correct* database into a
+    failure the moment the fork added a migration (the Chinese-CLIP vectors took
+    the schema to 18).  Reading `version: N` out of `db_sqflite.dart` keeps the
+    check honest as the fork grows; the fallback is only used when the script is
+    run outside a checkout.
+    """
+    dart = ROOT / "aves" / "lib" / "model" / "db" / "db_sqflite.dart"
+    try:
+        match = re.search(r"^\s*version:\s*(\d+),\s*$", dart.read_text(encoding="utf-8", errors="replace"), re.M)
+    except OSError:
+        return default
+    return int(match.group(1)) if match else default
+
+
 def read_app_tags(db_path):
-    """Return (user_version, cols, rows) for the fork's own table.
+    """Return (user_version, cols, rows, tables) for the fork's own table.
 
     `rows` is None when the table does not exist at all, which is the shape a
     stock (unforked) Aves database has -- reporting that as "0 rows" would be
@@ -217,7 +234,7 @@ def read_app_tags(db_path):
         version = cur.execute("pragma user_version").fetchone()[0]
         tables = {r[0] for r in cur.execute("select name from sqlite_master where type='table'")}
         if "appTags" not in tables:
-            return version, None, None
+            return version, None, None, tables
         paths = {}
         for name in ("entry", "entries"):
             if name not in tables:
@@ -230,7 +247,7 @@ def read_app_tags(db_path):
             (rid, paths.get(rid), [t for t in (tags or "").split(";") if t])
             for rid, tags in cur.execute("select id, tags from appTags order by id")
         ]
-        return version, ["id", "path", "tags"], rows
+        return version, ["id", "path", "tags"], rows, tables
     finally:
         con.close()
 
@@ -268,9 +285,19 @@ def do_verify(device, args):
     print("\n-- Aves database --")
     got = pull_db(device, args.package)
     print("    pulled: " + ", ".join(f"{k} ({v:,d} B)" for k, v in sorted(got.items())))
-    version, _, rows = read_app_tags(DBDIR / "metadata.db")
-    check("schema version is 17 (the fork's appTags migration)", version == 17, f"user_version={version}")
+    version, _, rows, tables = read_app_tags(DBDIR / "metadata.db")
+    expected = expected_schema_version()
+    check(
+        f"schema version is at least {expected} (the fork's migrations)",
+        version >= expected,
+        f"user_version={version}",
+    )
     check("appTags table exists", rows is not None, "" if rows is not None else "the table is absent")
+    check(
+        "appVectors table exists (Chinese-CLIP side table)",
+        "appVectors" in tables,
+        "" if "appVectors" in tables else "the table is absent -- did the 17->18 migration run?",
+    )
     rows = rows or []
     check("appTags has at least one row", len(rows) > 0, f"{len(rows)} row(s)")
     for rid, path, tags in rows:

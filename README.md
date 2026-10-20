@@ -190,6 +190,9 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
   只是想用就直接下 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 里的 APK（debug 签名，随便装）。
 - 自动打出来的标签是**建议**：角色阈值故意定得高，宁可漏报。
 - 分级标签来自 WD14 的 rating head，内容合规由使用者自己负责。
+- **语义搜索（按「沙滩」这种描述找图）要另导一份模型**：权重不在仓库里，没导出时 `/semantic`
+  报 `available: false`、打标完全照旧；手机上没把文本塔下到本机时查询要回落电脑端，所以电脑得开着。
+  它和标签是互补的两套结果，不是替代（见 [docs/SEMANTIC.md](docs/SEMANTIC.md)）。
 
 ## 许可
 

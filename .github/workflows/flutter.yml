@@ -24,15 +24,30 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
+      # These are the files this fork adds or edits. Keep the list in sync when
+      # you touch aves/: PR #1 landed `appVectorTable` undefined and a
+      # `String?` passed where `String` was wanted, and both only surfaced at
+      # `flutter build` time -- `dart analyze` on the touched files would have
+      # caught them in a minute.
       - name: 分析 fork 里改过的 Dart 文件
         run: |
           dart analyze \
             lib/model/app_tags.dart \
+            lib/model/app_vector.dart \
+            lib/model/app_vectors.dart \
             lib/services/ai_tagging_service.dart \
-            lib/widgets/dialogs/ai_tagging_page.dart \
-            lib/model/settings/modules/ai_tagging.dart \
+            lib/services/semantic_search_service.dart \
+            lib/services/on_device_text_encoder.dart \
             lib/services/android_debug_service.dart \
-            lib/model/entry/extensions/metadata_edition.dart
+            lib/widgets/dialogs/ai_tagging_page.dart \
+            lib/widgets/dialogs/semantic_search_page.dart \
+            lib/model/settings/modules/ai_tagging.dart \
+            lib/model/entry/extensions/metadata_edition.dart \
+            lib/model/db/db_sqflite.dart \
+            lib/model/db/db_sqflite_schema.dart \
+            lib/model/db/db_sqflite_upgrade.dart \
+            lib/model/source/media_store_source.dart \
+            lib/model/source/collection_source.dart
 
       - name: 上游自带的单元测试
         run: flutter test test/model/filters_test.dart test/utils/string_utils_test.dart

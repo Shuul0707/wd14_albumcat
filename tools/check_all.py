@@ -5,14 +5,18 @@ Usage:
     python tools\\check_all.py -k firewall     only the ones whose name matches
     python tools\\check_all.py --list
 
-Six checks, one per thing the docs claim -- and nothing else, because these are
+Seven checks, one per thing the docs claim -- and nothing else, because these are
 the paths that are actually wired up:
 
   * repository hygiene (pure ASCII .cmd, no secrets, doc links resolve)
   * the unit tests (rules, tag fields, config, types): no model, no GPU
   * the feature plugin chain (a head is trained, written, loaded back)
   * the firewall preflight parser (English + Chinese netsh output)
-  * the environment (`albumcat doctor`: model, packages, backend)
+  * the environment (`albumcat doctor`: model, packages, backend, semantic towers)
+  * the semantic-search HTTP contract (`/semantic`, `/encode_text`,
+    `/semantic/model`). Works in both states: with the Chinese-CLIP towers built
+    it checks the vectors, without them it checks that the feature degrades
+    politely instead of throwing.
   * the /plan_batch HTTP contract the phone parses. This is the expensive one:
     it starts a real `albumcat serve` on a free port, generates the probe images
     if they are missing, and runs the ONNX model over them. It needs the weights
@@ -43,7 +47,7 @@ TMP = ROOT / ".tmp"
 CHECKS: list[tuple[str, list[str]]] = [
     ("仓库卫生（ASCII .cmd / 密钥 / 文档链接 / .gitignore）",
      ["tools/check_repo.py"]),
-    ("单元测试（规则 / 标签字段 / 配置 / 类型）",
+    ("单元测试（规则 / 标签字段 / 配置 / 语义向量 / 类型）",
      ["tools/run_tests.py"]),
     ("feature 插件链路（768 维 ONNX head）",
      ["tools/check_feature_plugin.py"]),
@@ -51,11 +55,14 @@ CHECKS: list[tuple[str, list[str]]] = [
      ["tools/check_firewall.py"]),
     ("环境自检",
      ["tools/albumcat.cmd", "doctor"]),
+    ("语义搜索的 HTTP 契约（/semantic、/encode_text、/semantic/model）",
+     ["tools/check_semantic.py"]),
     ("/plan_batch 的 HTTP 契约（真的起一个 serve 跑一遍模型）",
      ["tools/check_plan_batch.py"]),
 ]
 
 BATCH_CHECK = ROOT / "tools" / "check_plan_batch.py"
+SEMANTIC_CHECK = ROOT / "tools" / "check_semantic.py"
 SERVE_LOG = TMP / "check_all-serve.log"
 
 
@@ -172,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
 
         server = logfile = None
         extra: list[str] = []
-        if target == BATCH_CHECK:
+        if target in (BATCH_CHECK, SEMANTIC_CHECK):
             try:
                 server, base, logfile = _start_serve(python, env)
             except RuntimeError as exc:
@@ -209,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * width)
     if not bad:
         print(f"  全部 {len(ok)} 项通过 —— 仓库卫生、单元测试、插件链路、防火墙预检、"
-              f"环境自检和 /plan_batch 契约都在真实的代码上验过了。")
+              f"环境自检、语义搜索契约和 /plan_batch 契约都在真实的代码上验过了。")
         return 0
 
     print(f"  {len(ok)} 项通过，{len(bad)} 项失败：")
