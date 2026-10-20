@@ -180,7 +180,10 @@ def main() -> int:
 
     files = sorted(p for p in image_dir.iterdir() if p.suffix.lower() in EXTS) if image_dir.exists() else []
     if not files:
-        print(f"{image_dir} 里没有图片")
+        print(f"{image_dir} 里没有图片。")
+        print("把几张图片拷进这个目录，或者用 --dir 指向自己的图库，例如：")
+        print("  python tools\\serve_semantic_demo.py --dir D:/pics")
+        print("建议至少 10 张、内容有差异的图，否则排序看不出区别。")
         return 1
 
     cache = image_dir / ".vectors.npz"
