@@ -14,8 +14,9 @@ models/
 # user photos used for testing -- never commit these
 samples/
 
-# runtime state (journal, caches) -- added later
-data/
+# runtime state (journal, caches) -- added later. Anchored to the repo root so
+# it does not swallow source data such as src/albumcat/data/tag_zh.json.
+/data/
 
 # build outputs: the Aves fork's APK is a build artifact, not a source --
 # publish it as a GitHub Release asset instead. dist/ also holds the course

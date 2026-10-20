@@ -166,6 +166,41 @@ curl -X POST http://127.0.0.1:8899/encode_text \
 
 文本塔未安装时返回 **503**，`error` 说明原因。`dtype` 可选（默认取配置里的 float16），手机要 `float32` 是为了能直接内存映射。
 
+### `POST /query`
+
+混合检索的解析端点：把一句中文拆成「点名的标签」+「剩下的描述」。
+
+```bash
+curl -X POST http://127.0.0.1:8899/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "黑暗的初音未来", "vector": true}'
+```
+
+```json
+{
+  "ok": true,
+  "text": "黑暗的初音未来",
+  "residual": "",
+  "vector_text": "黑暗",
+  "has_character": true,
+  "mentions": [
+    {"key": "dark", "category": "tag", "zh": "昏暗", "label": "Dark",
+     "matched": "黑暗", "start": 0, "end": 2, "weight": 0.55, "series": ""},
+    {"key": "hatsune_miku", "category": "character", "zh": "初音未来",
+     "label": "Hatsune Miku", "matched": "初音未来", "start": 3, "end": 7,
+     "weight": 1.0, "series": "VOCALOID"}
+  ],
+  "counts": {"mentions": 2, "characters": 1, "series": 0},
+  "vector": null,
+  "ms": 9.2
+}
+```
+
+- `mentions[].category` 是 `character` / `tag` / `rating` / `series`；`series` 是「作品名」这种不是 WD14 标签的提及，带 `keys`（该作品下全部角色的 tag）。
+- `vector_text` 是要喂给 CLIP 的部分：优先用切掉标签后剩下的描述词（`黑暗`），所以向量不会被角色名拉向「初音未来通常的明亮画面」。
+- `vector: true` 时额外下发 `{"dim": 512, "dtype": "float32", "vector": "…base64…"}`。**没有文本塔时 `vector` 是 `null` 而不是 503** —— 少了向量只是排序变粗，搜索不该整个不可用。
+- 空白文本 400。
+
 ### `GET /semantic/model?file=text_encoder.onnx`
 
 把文本塔 / 词表以 `application/octet-stream` 流式发给手机（只允许 `text_encoder.onnx` 与 `vocab.txt`，图像塔不提供）。需要 `X-Albumcat-Token`。手机端「下载到本机」用的就是它。
@@ -232,18 +267,139 @@ CREATE TABLE appVectors(
 
 ---
 
-## 6. 与标签搜索的关系
+## 6. 混合检索：标签与向量一起用
 
-两者是并列入口，不是替代：
+只按向量排序有个明显的失败方式：输入「黑暗的初音未来」，向量看到的是「黑暗」的
+画风，而初音未来的图大多是明亮舞台照 —— 结果会被一堆暗暗的、没有初音的照片占满。
+反过来只按标签筛选又会丢掉「黑暗」这种没有对应标签的描述。
+
+所以搜索分成两半，**在手机上融合**：
+
+```
+「黑暗的初音未来」
+   │
+   ├─ POST /query（电脑）→ 点名的标签：hatsune_miku（角色）、dark（普通）
+   │                     剩下的描述：黑暗 → 向量
+   │
+   └─ 手机：appTags 逐条比对 + appVectors 余弦 → 加权排序
+```
+
+### 打分
+
+| 情形 | 公式 |
+| --- | --- |
+| 查询点名了角色 | `0.55 × 角色命中 + 0.20 × 标签命中 + 0.25 × 向量分` |
+| 没有点名角色 | `0.50 × 标签命中 + 0.50 × 向量分` |
+
+- **角色命中是硬门槛**：点名了角色时，命中该角色的图先排（band 1），其余的排在后面
+  （band 0）。band 内再按分数排，所以「黑暗的初音未来」= 先所有初音未来，其中更暗的
+  更靠前。
+- **点名系列也一样**：`东方`、`VOCALOID` 这类作品名在 WD14 里没有对应标签，只在角色的
+  括号里出现（`hakurei_reimu_(touhou)`）。解析器会把它展开成整组角色，
+  「东方的角色」于是等价于「这些角色的任意一个」。
+- **向量分按本次候选集做 min-max 归一化**：Chinese-CLIP 的原始余弦几乎都挤在
+  0.15–0.35，直接参与加权等于没有权重；归一化之后「相对更暗」才有意义。
+  跨度为 0（所有图一样近）时统一给 0.5 —— 没有信息就不该假装有排序。
+- **缺项自动重新归一化**：没有向量（还没建索引、或文本塔失联）时只按标签排；
+  查询里没有普通标签时把那份权重让给角色与向量，而不是当成 0 分拉低所有图。
+- **点名的角色一张都没有时，退回均衡权重**：用户说「黑暗的初音未来」而相册里没有初音，
+  角色那一档 0.55 的权重谁也拿不到，最好的结果也只剩 0.25 分——分数难看、排序也没变。
+  这时按无角色处理，让标签与向量各占一半，语义仍然决定顺序。
+
+### 代码在哪
+
+| 位置 | 职责 |
+| --- | --- |
+| `src/albumcat/tagdict.py` | 解析：最长匹配切词，识别角色 / 系列 / 普通标签 / 分级 |
+| `src/albumcat/data/tag_zh.json` | 中文对照表（见下一节） |
+| `aves/lib/services/hybrid_ranking.dart` | 融合打分，纯 Dart，无 Flutter 依赖，可单测 |
+| `aves/lib/services/semantic_search_service.dart` | `query()` 调 `/query`；`searchHybrid()` 取向量再交给融合 |
+| `aves/test/services/hybrid_ranking_test.dart` | 7 个测试，钉住上面每一条规则 |
+
+---
+
+## 7. 中文对照表
+
+WD14 的 9083 个标签全是英文，而用户输入的是中文，所以解析器需要一张
+`tag → 中文名` 的表。
+
+**来源**：[ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table](https://github.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table)
+（MIT，`tag.sqlite`，33 万行 Danbooru 标签的中英对照）。覆盖情况：
+
+| | 数量 | 覆盖率 |
+| --- | --- | --- |
+| WD14 标签总数 | 9083 | — |
+| 源表里有条目 | 8702 | 95.8% |
+| 加上人工补录后有中文名 | 8713 | 95.9% |
+| 只有英文、没有中文名 | 370 | 4.1% |
+| 其中角色（category 4） | 2020 / 2132 | 94.7% |
+| 其中普通（category 0） | 6634 / 6947 | 95.5% |
+| 其中分级（category 9） | 0 / 4 | — |
+
+剩下 4% 只能靠英文原标签命中（`bangs`、`shiny_hair`、`hand_on_hip` 这类没有中文译名
+的），表里也存了英文 label，所以输入 `bangs` 一样能匹配。
+
+### 表的结构（`src/albumcat/data/tag_zh.json`，约 1 MB）
+
+```json
+{
+  "version": 1,
+  "source": "ffdkj/danbooru zh table (MIT) + albumcat curated aliases",
+  "counts": {"tags": 9083, "index": 18058, "zh": 8713, "no_zh": 370,
+             "from_dataset": 8702, "from_curated": 11, "series": 343,
+             "unknown_aliases": 54},
+  "tags": {
+    "hatsune_miku": {"k": "c", "n": "初音未来", "s": "VOCALOID",
+                     "a": ["初音", "miku", "初音ミク", "葱娘"]},
+    "dark":        {"k": "g", "n": "昏暗", "a": ["黑暗", "暗色", "漆黑"]}
+  },
+  "index": {"初音未来": "hatsune_miku", "昏暗": "dark"},
+  "series": {"touhou": {"n": "东方Project",
+                        "k": ["hakurei_reimu", "kirisame_marisa"]}}
+}
+```
+
+- `tags[].k` 是类别缩写：`c` 角色 / `g` 普通 / `r` 分级。
+- `index` 是挤压后的匹配键（小写、去空格下划线、保留汉字），所以
+  `初音未来` / `hatsune_miku` / `Hatsune Miku` 都落到同一个 tag。
+- 一个中文名对应多个 tag 时（`初音未来` ×3、`史莱姆` ×4），按 Danbooru 的
+  `post_count` 取最热门的那个，其余仍可通过英文名精确命中。
+- 角色名的括号里是系列（`初音未来（VOCALOID）` → `VOCALOID`），系列本身不进 `index`：
+  「角色」「人物」「原创」这类伪系列名在黑名单里，否则「东方的角色」会被解析成
+  「系列 = 角色」。
+
+### 重建
+
+```bash
+# 1. 抓源表（24 MB）
+curl -L -o .tmp/ffdkj_tags.sqlite \
+  https://github.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/raw/main/tag.sqlite
+
+# 2. 生成 tag_zh.json（9083 个标签 + 18058 个匹配键 + 343 个系列）
+python tools/build_tag_zh.py
+
+# 3. 人工补录写在 src/albumcat/data/tag_zh_curated.json，重新生成时自动合并
+```
+
+`tag_zh.json` 是**生成物**，但和代码一起提交 —— 手机 APK 不带这张表，只有电脑端
+`/query` 需要它，而用户不该为了搜一次图去装 24 MB 的 sqlite 再跑一遍脚本。
+
+---
+
+## 8. 与标签搜索的关系
+
+两者是并列入口，混合检索是第三条路：
 
 - **精确找**「某个角色的所有图」→ Tags 页（WD14 标签，零延迟，可离线）；
-- **模糊找**「下雨的街道」「有海的照片」→ 语义搜索（CLIP，需要向量已建好）。
+- **模糊找**「下雨的街道」「有海的照片」→ 语义搜索，纯向量；
+- **又准又糊**「黑暗的初音未来」「东方里的金发角色」→ 混合同一个搜索框，
+  标签与向量自动分工。
 
 打标那一趟顺带就把向量建好了（`include_vector: true`），不需要再跑一遍全库。
 
 ---
 
-## 7. 已知限制
+## 9. 已知限制
 
 - **不是 OCR**：图里的文字（比如截图上的台词）不在 CLIP 的语义里，别指望搜「写了什么」。
 - **不是精确定位**：CLIP 给的是整图相似度，不会告诉你「沙滩在左下角」。

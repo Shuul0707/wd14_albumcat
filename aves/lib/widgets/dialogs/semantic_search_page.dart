@@ -1,13 +1,19 @@
-import 'dart:ui' show FontFeature;
-
 import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/services/ai_tagging_service.dart';
+import 'package:aves/services/hybrid_ranking.dart';
 import 'package:aves/services/on_device_text_encoder.dart';
 import 'package:aves/services/semantic_search_service.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Free-form search: type "沙滩" and get the photos that look like it.
+/// Free-form search: type "黑暗的初音未来" and get the dark Miku photos first.
+///
+/// Two signals, one ranking. The PC parses the phrase into WD14 tags (the
+/// Chinese name table lives there), then [SemanticSearchService.searchHybrid]
+/// combines those tags with the query's meaning: a named character puts its
+/// photos in a band above everything else, and the leftover words ("黑暗") order
+/// the photos inside that band. With no character in the phrase the tags and
+/// the vector weigh the same.
 ///
 /// Deliberately not wired into Aves' own search bar: that one is a *filter*
 /// (tags, dates, albums) with instant per-keystroke semantics, while this is a
@@ -31,7 +37,8 @@ class SemanticSearchPage extends StatefulWidget {
 
 class _SemanticSearchPageState extends State<SemanticSearchPage> {
   final _controller = TextEditingController();
-  List<SemanticHit> _hits = const [];
+  List<HybridHit> _hits = const [];
+  ParsedQuery? _parsed;
   bool _running = false;
   String? _error;
   bool _searched = false;
@@ -86,14 +93,16 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
   ///
   /// No text encoding involved, so it stays responsive and works with the
   /// computer off — the only cost is the first matrix build.
-  void _similarTo(SemanticHit hit) {
+  void _similarTo(HybridHit hit) {
     final byId = {for (final entry in widget.entries) entry.id: entry};
     final hits = appVectors.similarTo(hit.entry.id, limit: 60);
     setState(() {
       _hits = [
         for (final neighbour in hits)
-          if (byId[neighbour.entryId] != null) SemanticHit(byId[neighbour.entryId]!, neighbour.score),
+          if (byId[neighbour.entryId] != null)
+            HybridHit(byId[neighbour.entryId]!, neighbour.score, vectorScore: neighbour.score),
       ];
+      _parsed = null;
       _searched = true;
       _error = null;
     });
@@ -108,7 +117,7 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
       _error = null;
     });
     try {
-      final hits = await SemanticSearchService.search(
+      final result = await SemanticSearchService.searchHybrid(
         text,
         server: widget.server,
         token: widget.token,
@@ -117,7 +126,8 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
       );
       if (!mounted) return;
       setState(() {
-        _hits = hits;
+        _hits = result.hits;
+        _parsed = result.query;
         _searched = true;
       });
     } catch (error) {
@@ -125,6 +135,7 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
       setState(() {
         _error = AiTaggingService.describeError(error);
         _hits = const [];
+        _parsed = null;
         _searched = true;
       });
     } finally {
@@ -132,23 +143,71 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
     }
   }
 
+  /// "初音未来（角色）· 黑暗" — what the ranking actually went on.
+  String? _understood() {
+    final parsed = _parsed;
+    if (parsed == null || parsed.mentions.isEmpty) return null;
+    final parts = <String>[
+      for (final mention in parsed.mentions) '${mention.display}${_kindSuffix(mention.kind)}',
+    ];
+    final meaning = parsed.vectorText.trim();
+    // A character nobody has is not a ranking signal: say so instead of
+    // implying the (empty) character band did something.
+    final bandEmpty = parsed.hasCharacter && !_hits.any((hit) => hit.band > 0);
+    final String tail;
+    if (bandEmpty) {
+      tail = meaning.isNotEmpty
+          ? '，相册里没有这些角色的标签，改按「$meaning」和画面相似度排序'
+          : '，相册里没有这些角色的标签，按画面相似度排序';
+    } else if (parsed.hasCharacter && meaning.isNotEmpty) {
+      // With a character the leftover words only order inside the band.
+      tail = '，再按「$meaning」排序';
+    } else {
+      tail = '';
+    }
+    return '识别到 ${parts.join(' · ')}$tail';
+  }
+
+  static String _kindSuffix(MentionKind kind) => switch (kind) {
+        MentionKind.character => '（角色）',
+        MentionKind.series => '（系列）',
+        _ => '',
+      };
+
+  /// "角色 ｜ 角色|Hatsune Miku" — why this photo is here.
+  String? _why(HybridHit hit) {
+    final parts = <String>[];
+    // Only one band exists below the rest: photos carrying the named
+    // character. Same-series credit was dropped when the ranking was
+    // simplified, so there is no "同系列" line to print.
+    if (hit.band >= 1) {
+      parts.add('角色');
+    }
+    if (hit.matched.isNotEmpty) {
+      parts.add(hit.matched.join('·'));
+    }
+    if (parts.isEmpty) return null;
+    return parts.join(' ｜ ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final total = appVectors.entryCount;
+    final understood = _understood();
 
     return AlertDialog(
       title: const Text('语义搜索'),
       content: SizedBox(
         width: 520,
-        height: 460,
+        height: 480,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               total == 0
-                  ? '还没有语义向量：先跑一次 AI 打标签，向量会在同一趟里建好。'
-                  : '已为 $total 张照片建立向量。试试「沙滩」「雨天的街道」「教室」。',
+                  ? '还没有语义向量：只能按标签匹配（跑一次 AI 打标签，向量会顺带建好）。'
+                  : '已为 $total 张照片建立向量。试试「沙滩」「黑暗的初音未来」「雨天的教室」。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 6),
@@ -162,13 +221,13 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    _local ? '本机编码：断网也能搜' : '电脑编码：需要电脑在线',
+                    _local ? '本机编码：断网也能搜（标签解析仍需电脑）' : '电脑编码：需要电脑在线',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
                 if (!_local)
                   TextButton(
-                    onPressed: _installing || total == 0 ? null : _installLocalEncoder,
+                    onPressed: _installing ? null : _installLocalEncoder,
                     child: Text(
                       _installing ? '下载中 ${(_progress * 100).round()}%' : '下载到本机',
                     ),
@@ -184,7 +243,7 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                     autofocus: true,
                     enabled: !_running,
                     decoration: const InputDecoration(
-                      hintText: '描述你想找的画面',
+                      hintText: '描述你想找的画面，也可以带角色名',
                       isDense: true,
                       border: OutlineInputBorder(),
                     ),
@@ -193,11 +252,21 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: _running || total == 0 ? null : _search,
+                  onPressed: _running ? null : _search,
                   child: Text(_running ? '搜索中…' : '搜索'),
                 ),
               ],
             ),
+            if (understood != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  understood,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+                ),
+              ),
             const SizedBox(height: 12),
             if (_error != null)
               Padding(
@@ -214,9 +283,10 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                     )
                   : ListView.separated(
                       itemCount: _hits.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final hit = _hits[index];
+                        final why = _why(hit);
                         return ListTile(
                           dense: true,
                           title: Text(
@@ -224,11 +294,14 @@ class _SemanticSearchPageState extends State<SemanticSearchPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          subtitle: why == null
+                              ? null
+                              : Text(why, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                hit.score.toStringAsFixed(3),
+                                hit.score.toStringAsFixed(2),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontFeatures: const [FontFeature.tabularFigures()],
                                 ),

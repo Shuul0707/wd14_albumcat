@@ -9,7 +9,7 @@
 ![app](https://img.shields.io/badge/相册-Aves%20fork-1f6feb)
 [![release](https://img.shields.io/github/v/release/Shuul0707/wd14_albumcat?label=release)](https://github.com/Shuul0707/wd14_albumcat/releases)
 
-> 手机端 APK 在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)：真机用 arm64，模拟器用 x64。
+> 手机端 APK 在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)：一个包内含 arm64-v8a / armeabi-v7a / x86_64，真机和模拟器都能装。
 > 电脑端按下面[快速开始](#快速开始)跑起来，两边连同一个 Wi-Fi 就能开始打标签。
 
 手机里攒了几千张同人图和截图，想按角色翻，系统相册却只能按时间。albumcat 把
@@ -54,6 +54,28 @@
 标签落在 Aves 自己的 `appTags` 表里，和照片自带的标签并集显示，所以 Tags 页和筛选直接就能用。
 fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都写在里面。
 
+## 在手机上搜：一句话，两种信号
+
+打标那一趟顺带把 512 维语义向量也存进 Aves 的 `appVectors` 表。于是手机里有一个搜索框，
+它同时听懂**点名的标签**和**描述的画面**：
+
+```text
+「黑暗的初音未来」
+   ├─ 标签半边：初音未来 → hatsune_miku（WD14 角色标签，最优先）
+   │            黑暗     → dark       （普通标签）
+   └─ 向量半边：「黑暗」 → Chinese-CLIP → 和每张图的向量算余弦
+                    ↓
+   命中了初音未来的照片先排（这一层是硬门槛），其中更暗的更靠前
+```
+
+没有点名角色时，标签和向量各占一半：「金发双马尾的夜晚」既筛 `blonde_hair` + `twintails`，
+也按「夜晚」的语义排序。查询里一个标签都没点中时，就退化成纯语义搜索。
+
+中文是查出来的，不是猜出来的：WD14 的 9083 个英文标签有一张
+[中文对照表](docs/SEMANTIC.md#7-中文对照表)（95.9% 有中文名，来自 MIT 授权的 Danbooru 对照表），
+`1girl` 认成「女孩 / 单个女孩」，角色名连系列一起认（「东方的角色」= 东方 Project 全员）。
+融合打分的代码在 `aves/lib/services/hybrid_ranking.dart`，有 7 个单测钉住每一条规则。
+
 ## 快速开始
 
 ### 1. 电脑端
@@ -79,7 +101,7 @@ tools\albumcat.cmd plan samples\
 
 ### 2. 手机端
 
-1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（真机 arm64、模拟器 x64），
+1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI，真机模拟器通用），
    或者按 [aves/FORK.md](aves/FORK.md) 自己构建；装好授权照片访问；
 2. 右上角 ✨ → **AI 打标签** → 填电脑地址 `http://192.168.1.10:8899` → **开始打标签**；
 3. 打完到 **Tags** 页，`角色|…` 会出现在那里。
@@ -176,7 +198,7 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
-| [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP：按「沙滩」这种描述找图，向量怎么存、文本塔能否端侧跑 |
+| [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP 向量 + 中文标签对照表 + 混合检索（「黑暗的初音未来」怎么排） |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
 | [参与开发](CONTRIBUTING.md) | 环境、改完怎么验、代码风格、跟着上游升级、许可 |
 | [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建、怎么升上游 |
@@ -192,7 +214,9 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
 - 分级标签来自 WD14 的 rating head，内容合规由使用者自己负责。
 - **语义搜索（按「沙滩」这种描述找图）要另导一份模型**：权重不在仓库里，没导出时 `/semantic`
   报 `available: false`、打标完全照旧；手机上没把文本塔下到本机时查询要回落电脑端，所以电脑得开着。
-  它和标签是互补的两套结果，不是替代（见 [docs/SEMANTIC.md](docs/SEMANTIC.md)）。
+- **混合检索的标签解析在电脑端**：中文对照表约 1 MB，随服务端走，`POST /query` 负责切词；
+  电脑不在线时搜索退化成纯向量（手机上装了文本塔的话），点名的角色名不会再起作用。
+  详见 [docs/SEMANTIC.md](docs/SEMANTIC.md)。
 
 ## 许可
 

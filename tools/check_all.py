@@ -13,10 +13,11 @@ the paths that are actually wired up:
   * the feature plugin chain (a head is trained, written, loaded back)
   * the firewall preflight parser (English + Chinese netsh output)
   * the environment (`albumcat doctor`: model, packages, backend, semantic towers)
-  * the semantic-search HTTP contract (`/semantic`, `/encode_text`,
+  * the semantic-search HTTP contract (`/semantic`, `/encode_text`, `/query`,
     `/semantic/model`). Works in both states: with the Chinese-CLIP towers built
     it checks the vectors, without them it checks that the feature degrades
-    politely instead of throwing.
+    politely instead of throwing. `/query` is the phone's query parser: it must
+    split "黑暗的初音未来" into the character tag plus the mood word.
   * the /plan_batch HTTP contract the phone parses. This is the expensive one:
     it starts a real `albumcat serve` on a free port, generates the probe images
     if they are missing, and runs the ONNX model over them. It needs the weights
@@ -55,7 +56,7 @@ CHECKS: list[tuple[str, list[str]]] = [
      ["tools/check_firewall.py"]),
     ("环境自检",
      ["tools/albumcat.cmd", "doctor"]),
-    ("语义搜索的 HTTP 契约（/semantic、/encode_text、/semantic/model）",
+    ("语义搜索的 HTTP 契约（/semantic、/encode_text、/query、/semantic/model）",
      ["tools/check_semantic.py"]),
     ("/plan_batch 的 HTTP 契约（真的起一个 serve 跑一遍模型）",
      ["tools/check_plan_batch.py"]),

@@ -33,6 +33,32 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = PROJECT_ROOT / "models" / "chinese-clip"
 
 
+def fold_external_data(path: Path) -> None:
+    """Fold the exporter's ``<name>.data`` sidecar back into the model file.
+
+    torch 2.x spools initialisers into a sibling file next to the graph. The
+    phone downloads ``text_encoder.onnx`` as a *single* file, so a sidecar
+    would arrive missing and the runtime would fail to load the model — the
+    PC image tower would still work (it keeps both files), which makes this
+    an annoying bug to notice. Both towers are well under protobuf's 2 GB
+    limit, so inlining them is safe.
+    """
+    sidecar = path.with_name(path.name + ".data")
+    if not sidecar.exists():
+        return
+    try:
+        import onnx
+        from onnx.external_data_helper import convert_model_from_external_data
+    except ImportError:  # pragma: no cover
+        sys.exit("需要 onnx 才能把外部权重合回单文件：python -m pip install onnx")
+
+    model = onnx.load(str(path))  # load_external_data=True pulls the sidecar in
+    convert_model_from_external_data(model)  # data_location back to DEFAULT
+    onnx.save_model(model, str(path))
+    sidecar.unlink()
+    print(f"  folded {sidecar.name} into {path.name}")
+
+
 def export(model_id: str, out_dir: Path, opset: int, max_text_length: int) -> None:
     try:
         import torch
@@ -119,22 +145,20 @@ def export(model_id: str, out_dir: Path, opset: int, max_text_length: int) -> No
         dynamic_axes=None,
     )
 
+    for path in (image_path, text_path):
+        fold_external_data(path)
+
     vocab_path = out_dir / "vocab.txt"
-    # Some transformers versions write `vocab.txt`, others `tokenizer.model`.
-    # The runtime tokenizer reads a plain vocab.txt, so make sure it exists.
-    source_vocab = Path(model_id) / "vocab.txt"
-    if source_vocab.exists():
-        vocab_path.write_bytes(source_vocab.read_bytes())
-        print(f"  vocab.txt copied from {source_vocab}")
-    else:
+    # The runtime tokenizer (and the on-device one) read a plain vocab.txt with
+    # one token per line, line number = token id.
+    if not vocab_path.exists():
         try:
-            processor.tokenizer.save_vocabulary(str(out_dir))
+            vocab = processor.tokenizer.get_vocab()
+            tokens = [token for token, _ in sorted(vocab.items(), key=lambda kv: kv[1])]
+            vocab_path.write_text("\n".join(tokens) + "\n", encoding="utf-8")
+            print(f"  vocab.txt written from the tokenizer ({len(tokens)} tokens)")
         except Exception as exc:  # noqa: BLE001
-            print(f"warning: could not save vocab ({exc}); copy it from the HF repo by hand")
-        for candidate in out_dir.rglob("vocab.txt"):
-            if candidate != vocab_path:
-                candidate.replace(vocab_path)
-                break
+            print(f"warning: could not write vocab.txt ({exc})")
     if not vocab_path.exists():
         print("warning: vocab.txt missing — the text tower will not load")
 

@@ -18,6 +18,12 @@ same problem with one extra twist: **they have to work in two states**.
 It also pins the one place where a bad request could read files it should not:
 `/semantic/model` must serve only `text_encoder.onnx` and `vocab.txt`.
 
+And `/query` -- the endpoint the phone's hybrid ranking calls. It must split
+"黑暗的初音未来" into the character mention `hatsune_miku` plus the leftover mood
+"黑暗", expand a series name ("东方的角色") into the cast, and still answer 200
+with a null vector when the text tower is missing (a missing embedding degrades
+the ranking, it does not break the search).
+
 Usage
 -----
     tools\\albumcat.cmd serve             # one terminal
@@ -32,6 +38,7 @@ from __future__ import annotations
 
 import base64
 import json
+import struct
 import sys
 import urllib.error
 import urllib.request
@@ -156,6 +163,72 @@ def main() -> int:
 
     status, raw, _headers = _request("/encode_text", payload=b"{ not json")
     check(status == 400, "400 on broken JSON", f"got {status}")
+
+    print("\nPOST /query")
+    # The phone's hybrid ranking needs the query split into named tags plus the
+    # words left over for CLIP. Both halves are checked here because the Dart
+    # side is compiled by another toolchain and never sees this source.
+    status, raw, _headers = _request("/query", payload={"text": "黑暗的初音未来", "vector": False})
+    body = _json(raw)
+    check(status == 200, "200 for a plain /query", f"got {status}")
+    if isinstance(body, dict):
+        mentions = body.get("mentions") or []
+        by_key = {m.get("key"): m for m in mentions if isinstance(m, dict)}
+        check("hatsune_miku" in by_key, "找到角色 hatsune_miku", repr(list(by_key)))
+        if "hatsune_miku" in by_key:
+            check(by_key["hatsune_miku"].get("category") == "character",
+                  "角色 mention 的 category 是 character",
+                  repr(by_key["hatsune_miku"].get("category")))
+            check(bool(by_key["hatsune_miku"].get("series")),
+                  "角色 mention 带系列名（手机端用于展示）",
+                  repr(by_key["hatsune_miku"].get("series")))
+        check("dark" in by_key, "找到通用标签 dark", repr(list(by_key)))
+        check(body.get("vector_text") == "黑暗", "vector_text 是剩下的情绪词",
+              repr(body.get("vector_text")))
+        check(body.get("has_character") is True, "has_character is true")
+        counts = body.get("counts")
+        check(isinstance(counts, dict) and counts.get("characters") == 1,
+              "counts 里有一个角色", repr(counts))
+        check(body.get("vector") is None, "vector=false 时不下发向量", repr(body.get("vector"))[:40])
+    else:
+        check(False, "/query 返回 JSON", repr(raw[:120]))
+
+    status, raw, _headers = _request("/query", payload={"text": "东方的角色"})
+    body = _json(raw)
+    check(status == 200, "200 for a series query", f"got {status}")
+    if isinstance(body, dict):
+        series = [m for m in (body.get("mentions") or [])
+                  if isinstance(m, dict) and m.get("category") == "series"]
+        check(bool(series), "把东方Project 认成系列", repr([m.get("key") for m in series]))
+        keys = (series[0].get("keys") if series else None) or []
+        check(len(keys) > 10, "系列展开成整组角色", str(len(keys)))
+        check("hakurei_reimu" in keys, "展开的角色里有博丽灵梦")
+
+    status, raw, _headers = _request(
+        "/query", payload={"text": "黑暗的初音未来", "vector": True, "dtype": "float32"}
+    )
+    body = _json(raw)
+    check(status == 200, "vector=true 时 /query 仍然 200（不 503）", f"got {status}")
+    if isinstance(body, dict):
+        block = body.get("vector")
+        if available:
+            # The phone asks for float32 and its Dart decoder drops anything
+            # else, so a silent float16 here would end as "no vector at all".
+            check(isinstance(block, dict) and block.get("dtype") == "float32",
+                  "vector=true 时下发 float32 向量块",
+                  repr(block.get("dtype")) if isinstance(block, dict) else repr(type(block).__name__))
+            if isinstance(block, dict):
+                try:
+                    values = struct.unpack("<512f", base64.b64decode(block.get("vector") or ""))
+                    check(max(abs(v) for v in values) <= 1.0001, "向量已经归一化",
+                          f"max |v| = {max(abs(v) for v in values):.3f}")
+                except Exception as exc:  # noqa: BLE001
+                    check(False, "向量块能解成 512 个 float32", repr(exc))
+        else:
+            check(block is None, "没有文本塔时 vector 是 null", repr(block))
+
+    status, raw, _headers = _request("/query", payload={"text": "  "})
+    check(status == 400, "400 on a blank /query", f"got {status}")
 
     print("\nGET /semantic/model")
     status, raw, _headers = _request("/semantic/model?file=../config.toml")

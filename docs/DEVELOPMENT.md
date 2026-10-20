@@ -38,10 +38,13 @@ debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都
 ## 自动检查（不用设备，也不用模型）
 
 ```bat
-python -m pytest              REM 规则 / 标签字段 / 配置 / 类型的单元测试，不到一秒
+python -m pytest              REM 规则 / 标签字段 / 配置 / 类型 / 查询解析的单元测试，不到两秒
 python tools\check_repo.py    REM 仓库卫生：*.cmd 纯 ASCII、疑似密钥、文档链接、.gitignore
 tools\check_all.cmd           REM 上面两条 + 四条端到端的全跑（要模型；最贵那条真的起一个 serve）
 ```
+
+`tests\test_tagdict.py` 钉住 `/query` 的解析规则：角色名与情绪词要分开、作品名要展开成角色表、
+中英日三种写法落到同一个 tag、长匹配优先于短匹配。
 
 `check_all` 支持 `-k` 只跑名字匹配的检查（`tools\check_all.cmd -k firewall`）和 `--list` 看清单。
 CI 在 `.github/workflows/ci.yml`：push / PR 时跑 pytest、`check_repo.py`、`albumcat --help`（CPU 后端，
@@ -106,12 +109,17 @@ albumcat/
 │  ├─ types.py                  Prediction / TagSet / TagPlan
 │  ├─ config.py                 配置加载
 │  ├─ cli.py                    命令行
-│  └─ tagfields.py              flat / hierarchical 标签字段（手机端存的就是 flat 那份）
+│  ├─ tagfields.py              flat / hierarchical 标签字段（手机端存的就是 flat 那份）
+│  ├─ tagdict.py                查询解析：中文句子 → WD14 标签（含作品名展开）
+│  └─ data/tag_zh.json          中文对照表（9083 标签 / 18058 匹配键 / 343 系列，约 1 MB）
 ├─ tools/
 │  ├─ download_model.py         模型下载（纯标准库，可续传）
 │  ├─ add_feature_output.py     给模型加特征输出（替代上游 1.2GB 拆分模型）
+│  ├─ build_tag_zh.py           用 ffdkj 的 Danbooru 中文对照表重建 data/tag_zh.json
+│  ├─ export_chinese_clip_onnx.py  导出 Chinese-CLIP 两个 ONNX 塔（语义搜索/混合检索用）
 │  ├─ check_feature_plugin.py   feature 插件链路自检
 │  ├─ check_firewall.py         防火墙自检
+│  ├─ check_semantic.py         /semantic、/encode_text、/query 的 HTTP 契约自检
 │  ├─ check_plan_batch.py       /plan_batch 批量接口自检（自带一个临时服务端）
 │  ├─ make_aves_probe.py        把样例图拷成 4 张探针图（端到端验证用）
 │  ├─ make_alpha_probe.py       造一张带透明通道的 PNG，验证取图时透明像素被压成白底

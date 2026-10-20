@@ -25,12 +25,20 @@ Endpoints
     POST /plan      one image  -> one finished tag set
     POST /plan_batch  [{...}, ...] -> [{...}, ...]
     POST /encode_text  {"text": "沙滩"} -> one query vector
+    POST /query     {"text": "黑暗的初音未来"} -> tags named + vector of the rest
 
 Semantic search splits across the two machines on purpose: the PC runs the
 image tower once per photo (it is the expensive half) and hands the vector
 back with the tags; the phone keeps that vector beside ``appTags`` and runs
 the *text* tower per query -- or calls ``/encode_text`` when it has no model
 of its own. See ``semantic.py`` and ``docs/SEMANTIC.md``.
+
+``/query`` is the other half: the Chinese tag table lives with the model, so
+the PC splits the phrase into WD14 tags (a named character is the strongest
+signal a query can carry) and returns the leftover words separately. The phone
+then ranks its own photos with that split -- the vectors are on the phone, so
+only the parse has to travel. Without a text tower ``/query`` still answers
+200 with ``"vector": null``; only the ranking degrades.
 
 Request body for /plan, either form:
 
@@ -67,6 +75,7 @@ from .semantic import (
     apply_vector_policy,
     pack_vector,
 )
+from .tagdict import TagDictionary, load_dictionary
 from .tagfields import plan_to_tag_fields
 
 __all__ = ["TaggingService", "serve"]
@@ -112,8 +121,16 @@ class TaggingService:
         self._cache_order: list[str] = []
         self.cache_hits = 0
         self.started = time.time()
+        self._tagdict: TagDictionary | None = None
 
     # -- introspection ----------------------------------------------------- #
+
+    @property
+    def tagdict(self) -> TagDictionary:
+        """The Chinese name table, loaded on first use (~1 MB of JSON)."""
+        if self._tagdict is None:
+            self._tagdict = load_dictionary()
+        return self._tagdict
 
     @property
     def tagger(self):
@@ -321,6 +338,53 @@ class TaggingService:
             "ms": round((time.perf_counter() - started) * 1000, 1),
         }
 
+    def parse_query(self, text: str, *, with_vector: bool = False,
+                    dtype: str | None = None) -> dict:
+        """Split a search phrase into tag mentions, plus its CLIP vector.
+
+        This is the hybrid-search endpoint: the phone sends what the user typed
+        ("黑暗的初音未来") and gets back both halves -- the character tag the
+        phrase names, and a vector for the words that are left over ("黑暗").
+
+        A missing Chinese-CLIP model is *not* an error here. The tag half still
+        works, and answering 503 would break search exactly when the user would
+        have been happy with tag-only results.
+        """
+        started = time.perf_counter()
+        parsed = self.tagdict.parse(text)
+        payload: dict[str, Any] = {"ok": True, **parsed.to_dict()}
+        payload["counts"] = {
+            "mentions": len(parsed.mentions),
+            "characters": len(parsed.character_keys),
+            "series": sum(1 for m in parsed.mentions if m.is_series),
+        }
+        payload["residual"] = parsed.residual
+        if with_vector:
+            payload["vector"] = self._query_vector(parsed.vector_text, dtype)
+        payload["ms"] = round((time.perf_counter() - started) * 1000, 1)
+        return payload
+
+    def _query_vector(self, text: str, dtype: str | None = None) -> dict | None:
+        """Vector for the leftover phrase, or None if that is not possible."""
+        if not text or not self.semantic.available:
+            return None
+        dtype = dtype or self.config.semantic.dtype
+        if dtype not in ("float16", "float32"):
+            raise ValueError(f"unsupported vector_dtype: {dtype}")
+        try:
+            with self._lock:
+                vector = self.semantic.encode_text(text)
+        except Exception as exc:  # noqa: BLE001 - tags alone still rank
+            log.warning("query encode failed: %s", exc)
+            return None
+        return {
+            "model": self.config.semantic.model_id,
+            "dim": int(vector.shape[0]),
+            "dtype": dtype,
+            "vector": pack_vector(vector, dtype),
+            "text": text,
+        }
+
 
 # --------------------------------------------------------------------------- #
 # HTTP
@@ -387,7 +451,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
-        if path not in ("/plan", "/plan_batch", "/encode_text"):
+        if path not in ("/plan", "/plan_batch", "/encode_text", "/query"):
             self._error(404, f"no such endpoint: {path}")
             return
         if not self._authed():
@@ -406,6 +470,8 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             if path == "/encode_text":
                 self._send(200, self._handle_encode_text(raw))
+            elif path == "/query":
+                self._send(200, self._handle_query(raw))
             elif path == "/plan":
                 self._send(200, self._handle_one(raw, ctype))
             else:
@@ -493,6 +559,26 @@ class _Handler(BaseHTTPRequestHandler):
             raise ValueError("missing 'text'")
         dtype = obj.get("dtype") if isinstance(obj, dict) else None
         return self.service.encode_text(text, dtype=(str(dtype) if dtype else None))
+
+    def _handle_query(self, raw: bytes) -> dict:
+        """POST /query  {"text": "黑暗的初音未来"}  -> tags + optional vector."""
+        try:
+            obj = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"bad JSON: {exc}") from exc
+        if isinstance(obj, str):
+            obj = {"text": obj}
+        if not isinstance(obj, dict):
+            raise ValueError("expected {'text': '...'} or a bare JSON string")
+        text = obj.get("text") or obj.get("q") or obj.get("query") or ""
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("missing 'text'")
+        dtype = obj.get("dtype")
+        return self.service.parse_query(
+            text,
+            with_vector=bool(obj.get("vector", True)),
+            dtype=(str(dtype) if dtype else None),
+        )
 
     def _handle_one(self, raw: bytes, ctype: str) -> dict:
         q = self._query()
