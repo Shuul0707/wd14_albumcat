@@ -99,6 +99,7 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 | `tools\albumcat.cmd train --data … --out …` | 用标注样本训练一个 `feature` 插件 |
 | `tools\phone_link.cmd` | 没有局域网时，把手机的 `127.0.0.1:8899` 接到电脑 |
 | `python tools\serve_semantic_demo.py --dir samples` | 浏览器里看语义搜索效果（不用手机、不用 Aves） |
+| `tools\serve_semantic_demo.cmd [目录]` | 同上，双击就行；不带参数用 `samples\` |
 
 ## 配置
 
