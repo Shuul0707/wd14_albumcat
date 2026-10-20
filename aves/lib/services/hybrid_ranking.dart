@@ -429,6 +429,79 @@ List<RankedCandidate> rankCandidates(
   return scored;
 }
 
+/// One mention as the UI should print it: `初音未来（角色）`.
+String describeMention(QueryMention mention) => '${mention.display}${mentionKindSuffix(mention.kind)}';
+
+/// `（角色）` / `（系列）` / nothing.
+String mentionKindSuffix(MentionKind kind) => switch (kind) {
+      MentionKind.character => '（角色）',
+      MentionKind.series => '（系列）',
+      _ => '',
+    };
+
+/// What the ranking actually went on, for the line above the results.
+///
+/// `识别到 初音未来（角色）· 黑暗，再按「黑暗」排序`. Empty when the phrase named
+/// nothing, so callers can hide the line instead of printing a fragment.
+///
+/// [characterMatched] is whether any photo actually landed in the character
+/// band: a named character nobody has is not a ranking signal, and saying so is
+/// better than implying the (empty) band did something.
+String describeParsedQuery(ParsedQuery query, {bool characterMatched = true}) {
+  if (query.mentions.isEmpty) return '';
+  final List<String> parts = <String>[for (final QueryMention m in query.mentions) describeMention(m)];
+  final String meaning = query.vectorText.trim();
+  final String tail;
+  if (query.hasCharacter && !characterMatched) {
+    tail = meaning.isNotEmpty
+        ? '，相册里没有这些角色的标签，改按「$meaning」和画面相似度排序'
+        : '，相册里没有这些角色的标签，按画面相似度排序';
+  } else if (query.hasCharacter && meaning.isNotEmpty) {
+    // With a character the leftover words only order inside the band.
+    tail = '，再按「$meaning」排序';
+  } else if (!query.hasCharacter) {
+    // No character: tags and vector weigh the same, because there is no class
+    // to privilege.
+    tail = meaning.isNotEmpty ? '，标签与画面相似度各占一半' : '，按标签匹配';
+  } else {
+    tail = '';
+  }
+  return '识别到 ${parts.join(' · ')}$tail';
+}
+
+/// Everything the results page needs to describe one hybrid search.
+///
+/// Lives here, and not in the search service, because two things need it: the
+/// delegate that runs the search and the collection page that shows the result.
+/// Keeping it dependency free means the page does not pull in HTTP.
+class SemanticSearchInfo {
+  const SemanticSearchInfo({
+    required this.text,
+    required this.parsed,
+    required this.hitCount,
+    required this.characterMatched,
+    this.viaUsb = false,
+  });
+
+  /// What the user typed.
+  final String text;
+
+  /// The phrase as the PC understood it.
+  final ParsedQuery parsed;
+
+  /// How many photos the ranking kept.
+  final int hitCount;
+
+  /// Whether the named character was actually found in the library.
+  final bool characterMatched;
+
+  /// Whether the PC was reached over the USB tunnel rather than the LAN.
+  final bool viaUsb;
+
+  /// `识别到 初音未来（角色）· 黑暗，再按「黑暗」排序`
+  String get description => describeParsedQuery(parsed, characterMatched: characterMatched);
+}
+
 class _Scored {
   const _Scored({
     required this.entryId,

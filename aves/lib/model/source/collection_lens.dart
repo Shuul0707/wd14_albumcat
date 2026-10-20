@@ -22,6 +22,7 @@ import 'package:aves/model/source/location/location.dart';
 import 'package:aves/model/source/section_keys.dart';
 import 'package:aves/model/source/tag.dart';
 import 'package:aves/ref/mime_types.dart';
+import 'package:aves/services/hybrid_ranking.dart';
 import 'package:aves/widgets/collection/collection_page.dart';
 import 'package:aves_model/aves_model.dart';
 import 'package:aves_utils/aves_utils.dart';
@@ -43,6 +44,10 @@ class CollectionLens with ChangeNotifier {
   int? id;
   bool listenToSource, stackBursts, stackDevelopedRaws, fixedSort;
   List<AvesEntry>? fixedSelection;
+
+  /// Set when this collection shows a semantic ranking, so the app bar can
+  /// explain what the search understood.
+  SemanticSearchInfo? semantic;
 
   // temporary entries created for stacks of original entries
   final Set<AvesEntry> _syntheticEntries = {};
@@ -66,6 +71,7 @@ class CollectionLens with ChangeNotifier {
     this.stackDevelopedRaws = true,
     this.fixedSort = false,
     this.fixedSelection,
+    this.semantic,
   }) : filters = (filters ?? {}).nonNulls.toSet() {
     if (kFlutterMemoryAllocationsEnabled) ChangeNotifier.maybeDispatchObjectCreation(this);
     _updateLayoutFactors();
@@ -127,7 +133,12 @@ class CollectionLens with ChangeNotifier {
     filters: filters ?? this.filters,
     id: id,
     listenToSource: listenToSource ?? this.listenToSource,
+    // the viewer takes a copy of the grid's lens (`CollectionGrid._goToViewer` with
+    // `listenToSource: false`): dropping these would show the ranked photos in the
+    // grid but the same photos in date order once tapped, which looks like a bug
+    fixedSort: fixedSort,
     fixedSelection: fixedSelection ?? this.fixedSelection,
+    semantic: semantic,
   );
 
   void _disposeSyntheticEntries() {
@@ -208,6 +219,11 @@ class CollectionLens with ChangeNotifier {
     final entries = fixedSelection ?? (filters.contains(TrashFilter.instance) ? source.trashedEntries : source.visibleEntries);
     _disposeSyntheticEntries();
     _filteredSortedEntries = List.of(filters.isEmpty ? entries : entries.where((entry) => filters.every((filter) => filter.test(entry))));
+
+    // A fixed selection comes with its own order (a semantic ranking, a slide
+    // show sequence): stacking would reorder it by date or fold photos into
+    // groups, which is exactly what the caller does not want.
+    if (fixedSort) return;
 
     if (tileLayout == .calendar) {
       _stackByDate();

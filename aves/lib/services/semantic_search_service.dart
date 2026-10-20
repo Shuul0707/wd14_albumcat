@@ -45,6 +45,9 @@ class HybridResult {
   final List<HybridHit> hits;
 
   const HybridResult(this.query, this.hits);
+
+  /// Whether any hit landed in the character band.
+  bool get hasCharacterBand => hits.any((HybridHit hit) => hit.band > 0);
 }
 
 /// Turns a Chinese phrase into a vector and ranks the library against it.

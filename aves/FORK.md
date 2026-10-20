@@ -2,7 +2,7 @@
 
 这是 [Aves](https://github.com/deckerst/aves)（Thibault Deckers 写的相册应用，BSD 3-Clause，
 见本目录 `LICENSE`）的一份 fork，加进了本项目要用的「AI 打标签」功能：把照片缩略图发给电脑端的
-WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`app_tags` 表），照片文件一个字节都不改。
+WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`appTags` 表），照片文件一个字节都不改。
 
 - 上游基线：`deckerst/aves` 分支 `develop`，commit `f3cbe6e128bfbfc686b312f8abb3b7af77e8cd7`
   （2026-10-10，「perf: cache synced directory children lists」），应用版本 `1.15.5+179`。
@@ -14,38 +14,39 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`app_tag
 集合页工具栏最右边多了一个「AI 打标签」按钮（`lib/widgets/collection/app_bar.dart`）。
 点开是设置页：电脑端地址、令牌、同时取几张缩略图、「只标角色」、「跳过已经有标签的图片」，
 下面是「测试连接」和「开始打标签」，输出框里逐批报告进度。打标结果落在 Aves 的
-`app_tags` 表里，Tags 页就会出现 `角色|Hakurei Reimu` 这种可以点开筛选的标签。
+`appTags` 表里，Tags 页就会出现 `角色|Hakurei Reimu` 这种可以点开筛选的标签。
 
 ## 相对上游改了什么
 
-新增（11 个文件）：
+新增（12 个文件）：
 
 | 文件 | 作用 |
 | --- | --- |
-| `lib/model/app_tags.dart` | `app_tags` 表的内存模型；`ChangeNotifier`，改了标签集合就通知界面刷新 |
+| `lib/model/app_tags.dart` | `appTags` 表的内存模型；`ChangeNotifier`，改了标签集合就通知界面刷新 |
 | `lib/services/ai_tagging_service.dart` | 取缩略图、POST `/plan_batch`、把结果一批一落盘；单批失败重试一次，连着 3 批失败才停。请求里带 `include_vector`，一趟同时拿语义向量 |
-| `lib/widgets/dialogs/ai_tagging_page.dart` | 上面那个设置页 / 进度框；底部多一个「语义搜索」入口 |
+| `lib/widgets/dialogs/ai_tagging_page.dart` | 上面那个设置页 / 进度框（语义搜索的入口不在这里，在原生搜索框里） |
 | `lib/model/settings/modules/ai_tagging.dart` | 打标签相关设置项（地址、令牌、并发、只看角色…） |
 | `android/gradle/gradle-daemon-jvm.properties.disabled` | 把上游钉死「用 Adoptium JDK 构建守护进程」的那份配置停用（改后不强制下载第二个 JDK） |
 | `lib/model/app_vector.dart` | 单条语义向量（`model` / `dim` / base64 float32）；`decode()` 成 `Float32List` |
-| `lib/model/app_vectors.dart` | `app_vectors` 表的内存模型；把全库向量拼成一张 `N×dim` 矩阵，`nearest()` 做余弦 top-k（1 万张几毫秒） |
-| `lib/services/semantic_search_service.dart` | 查询编码（优先端侧、回落 PC 的 `/encode_text`）＋排序，结果映射回 `AvesEntry` |
+| `lib/model/app_vectors.dart` | `appVectors` 表的内存模型；把全库向量拼成一张 `N×dim` 矩阵，`nearest()` 做余弦 top-k（1 万张几毫秒） |
+| `lib/services/semantic_search_service.dart` | `query()` 调 PC 的 `/query`（优先端侧文本塔编码）、`searchHybrid()` 取全库余弦再交给融合排序，结果映射回 `AvesEntry` |
 | `lib/services/on_device_text_encoder.dart` | 端侧文本塔的 Dart 侧：私有目录检查、`.part` 下载后改名、加载与编码 |
-| `lib/widgets/dialogs/semantic_search_page.dart` | 语义搜索页：输入中文描述、显示相似度、「下载到本机」与「本机/电脑编码」状态 |
+| `lib/services/hybrid_ranking.dart` | 纯 Dart 的融合打分（角色 band + 标签 + 向量）与「听懂了什么」的文案，11 个单测钉住 |
+| `lib/widgets/search/semantic_search_banner.dart` | 语义排序结果页 app bar 底部那一条说明横幅 |
 | `android/.../channel/calls/TextEncoderHandler.kt` | 端侧 Chinese-CLIP 文本塔：onnxruntime-android 加载、自实现 BERT WordPiece、原生侧 L2 归一化 |
 
 数据库与标签模型：
 
 - `lib/model/db/db_sqflite_schema.dart`、`db_sqflite.dart`、`db_sqflite_upgrade.dart`、`db.dart`
-  —— schema 升到 **v18**，多两张表：`app_tags`（条目 id → `;` 分隔的标签串）与
-  `app_vectors`（条目 id → 图像塔 id / 维度 / base64 float32 向量），各带增删查接口
+  —— schema 升到 **v18**，多两张表：`appTags`（条目 id → `;` 分隔的标签串）与
+  `appVectors`（条目 id → 图像塔 id / 维度 / base64 float32 向量），各带增删查接口
   与迁移（16→17、17→18）。向量和标签一样只住在数据库里，照片文件一个字节都不改。
 - `lib/model/entry/entry.dart` —— 条目显示的标签是「文件自带的标签 ∪ app 标签」的并集。
 - `lib/model/entry/extensions/metadata_edition.dart` —— **闸门**：界面上改标签时，只有本来就在
   文件里的标签会被写回文件（IPTC/XMP），纯 app 标签永远不落到照片上。
 - `lib/model/source/media_store_source.dart`、`collection_source.dart`、`tag.dart`
   —— 启动时载入 app 标签、监听变化；媒体库一次少了一大截时（看着像抖了一下）宁可留孤儿行，
-  也不把 app 标签一起清掉（`app_tags` 是不可再生的）。
+  也不把 app 标签一起清掉（`appTags` 是不可再生的）。
 - `lib/widgets/collection/app_bar.dart`、`entry_set_action_delegate.dart`、
   `widgets/common/action_mixins/entry_editor.dart`、`widgets/dialogs/entry_editors/tag_editor_page.dart`、
   `widgets/viewer/action/entry_info_action_delegate.dart`、`lib/model/settings/settings.dart`、
@@ -62,6 +63,16 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`app_tag
   免得数据库被一次抖动清空。
 - `lib/services/android_debug_service.dart` —— 上面那条通道的 Dart 侧封装。
 
+搜索框（语义排序没有单独页面）：
+
+- `lib/widgets/search/collection_search_delegate.dart` —— `buildResults` 里判 `_semanticWorthy`
+  （有向量 + 设了电脑端地址 + 查询不含 Aves 自己的语法 `tag:` `#` `@` `rating>` 纯数字），成立就
+  `resolveReachable` → `searchHybrid` → push 一个普通 `CollectionPage`（`fixedSort: true` +
+  `fixedSelection` + `semantic`）；建议列表多一行「按意思搜「…」」；失败时提示并回落原生 `QueryFilter`。
+- `lib/model/source/collection_lens.dart` —— `fixedSelection` 的列表在 `_applyFilters` 之后直接返回
+  （不再按日期叠组）；`copyWith` 会把 `fixedSort` / `fixedSelection` / `semantic` 一起带走，
+  所以 viewer（`CollectionGrid._goToViewer` 拿的是 lens 的拷贝）与网格同序。
+
 ## 怎么构建
 
 需要：**JDK 21**、**Flutter 3.47.6**（Dart 3.13.5）、Android SDK（`compileSdk 37`，
@@ -69,7 +80,7 @@ build-tools 36.0.0）。自己在设备上装的话，一份 debug APK 就够了
 `adb install` 直接能装）：
 
 ```powershell
-# 在本仓库根目录，构建 arm64（真机）或 x64（模拟器）
+# 在本仓库根目录构建（-Platform 只影响传给 flutter 的 target-platform 参数）
 tools\aves_build.ps1 -Platform android-arm64
 tools\aves_build.ps1 -Platform android-x64
 
@@ -77,6 +88,10 @@ tools\aves_build.ps1 -Platform android-x64
 flutter build apk --debug --flavor libre --target-platform android-arm64 -t lib/main_libre.dart
 # 产物：build\app\outputs\flutter-apk\app-libre-debug.apk
 ```
+
+⚠️ 实测：**debug libre 包会同时打进 arm64-v8a / armeabi-v7a / x86_64 三个 ABI**，
+`--target-platform` 对这份 debug 配置不起作用——两个 `-Platform` 构建出来的 APK 只差几 KB，
+功能上没有区别。所以真机和模拟器装同一个包就行（Release 里也只放一个）。
 
 几点注意：
 

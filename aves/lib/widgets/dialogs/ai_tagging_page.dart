@@ -7,7 +7,6 @@ import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/props.dart';
 import 'package:aves/model/settings/settings.dart';
 import 'package:aves/services/ai_tagging_service.dart';
-import 'package:aves/widgets/dialogs/semantic_search_page.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Runs the external tagger over [entries] and stores the answers in Aves' own
@@ -261,20 +260,6 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
               OutlinedButton(
                 onPressed: _running ? () => setState(() => _stopRequested = true) : null,
                 child: const Text('停止'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _running || appVectors.entryCount == 0
-                    ? null
-                    : () => showDialog(
-                          context: context,
-                          builder: (_) => SemanticSearchPage(
-                            entries: widget.entries,
-                            server: settings.aiTaggingServer,
-                            token: settings.aiTaggingToken,
-                          ),
-                        ),
-                child: const Text('语义搜索'),
               ),
             ],
           ),

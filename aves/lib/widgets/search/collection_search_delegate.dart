@@ -1,5 +1,6 @@
 import 'package:aves/locale/calendar/calendar_utils.dart';
 import 'package:aves/model/dynamic_albums.dart';
+import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/filters/aspect_ratio.dart';
 import 'package:aves/model/filters/container/dynamic_album.dart';
 import 'package:aves/model/filters/container/set_and.dart';
@@ -24,6 +25,10 @@ import 'package:aves/model/source/collection_source.dart';
 import 'package:aves/model/source/location/country.dart';
 import 'package:aves/model/source/location/place.dart';
 import 'package:aves/model/source/tag.dart';
+import 'package:aves/services/ai_tagging_service.dart';
+import 'package:aves/services/hybrid_ranking.dart';
+import 'package:aves/services/semantic_search_service.dart';
+import 'package:aves/theme/icons.dart';
 import 'package:aves/widgets/collection/collection_page.dart';
 import 'package:aves/widgets/common/action_mixins/feedback.dart';
 import 'package:aves/widgets/common/action_mixins/vault_aware.dart';
@@ -135,6 +140,7 @@ class CollectionSearchDelegate extends AvesSearchDelegate with FeedbackMixin, Va
                     TvEdgeFocus(
                       focusNode: _suggestionsTopFocusNode,
                     ),
+                    if (_semanticWorthy) _buildSemanticRow(context),
                     _buildFilterRow(
                       context: context,
                       filters: [
@@ -335,9 +341,22 @@ class CollectionSearchDelegate extends AvesSearchDelegate with FeedbackMixin, Va
   }
 
   var _selectingFromQuery = false;
+  bool _semanticRunning = false;
 
   @override
   Widget buildResults(BuildContext context) {
+    if (_semanticWorthy) {
+      if (!_semanticRunning) {
+        _semanticRunning = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _selectSemantic(context));
+      }
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
     // guard against multiple build calls
     if (!_selectingFromQuery) {
       _selectingFromQuery = true;
@@ -349,6 +368,112 @@ class CollectionSearchDelegate extends AvesSearchDelegate with FeedbackMixin, Va
       });
     }
     return const SizedBox();
+  }
+
+  /// Whether this search should go through the tag table and the vector,
+  /// instead of Aves' own query filter.
+  ///
+  /// Only when the phone holds vectors, a PC is configured, and the text is not
+  /// Aves' own query syntax: `tag:x`, `#hash`, `rating>3` and a bare number mean
+  /// something precise, and reinterpreting them as a picture description would
+  /// silently drop what the user typed.
+  bool get _semanticWorthy {
+    final text = query.trim();
+    if (text.isEmpty) return false;
+    if (!SemanticSearchService.hasVectors) return false;
+    if (settings.aiTaggingServer.trim().isEmpty) return false;
+    return !_looksLikeAvesQuery(text);
+  }
+
+  static final RegExp _avesQuerySyntax = RegExp(r'[#:@<>="]|^\d+$');
+
+  static bool _looksLikeAvesQuery(String text) => _avesQuerySyntax.hasMatch(text);
+
+  /// Advertises the semantic route in the suggestions row, so pressing Enter is
+  /// an informed choice rather than a surprise reordering of the album.
+  Widget _buildSemanticRow(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    return InkWell(
+      onTap: () => showResults(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(AIcons.search, size: 20, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '按意思搜「${query.trim()}」',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectSemantic(BuildContext context) async {
+    final text = query.trim();
+    try {
+      final (base, viaUsb) = await AiTaggingService.resolveReachable(settings.aiTaggingServer, token: settings.aiTaggingToken);
+      final entries = (parentCollection?.sortedEntries ?? source.visibleEntries).toList();
+      final result = await SemanticSearchService.searchHybrid(
+        text,
+        server: base,
+        token: settings.aiTaggingToken,
+        entries: entries,
+        // More than a screenful: the grid scrolls, and the tail is exactly where
+        // the description ("dark") and the vector do the sorting.
+        limit: 120,
+      );
+      if (!context.mounted) return;
+      if (result.hits.isEmpty) {
+        showFeedback(context, FeedbackType.warn, '没找到与「$text」相似的照片');
+        await _select(context, {_buildQueryFilter(true)});
+        return;
+      }
+      _jumpToSemanticPage(
+        context,
+        result.hits.map((hit) => hit.entry).toList(),
+        SemanticSearchInfo(
+          text: text,
+          parsed: result.query,
+          hitCount: result.hits.length,
+          characterMatched: result.hasCharacterBand,
+          viaUsb: viaUsb,
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      // The tag table and the text tower live on the PC. Without it a semantic
+      // search cannot even be attempted, so say why and still show the photos
+      // Aves would have shown for this text.
+      showFeedback(context, FeedbackType.warn, error is AiTaggingException ? error.toString() : '语义搜索失败：$error');
+      await _select(context, {_buildQueryFilter(true)});
+    }
+  }
+
+  void _jumpToSemanticPage(BuildContext context, List<AvesEntry> entries, SemanticSearchInfo semantic) {
+    clean();
+    Navigator.maybeOf(context)?.pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: CollectionPage.routeName),
+        builder: (context) => CollectionPage(
+          source: source,
+          // no filters: the selection *is* the result, and filters would only
+          // re-sort or re-filter it against the order we just computed
+          filters: const {},
+          fixedSelection: entries,
+          fixedSort: true,
+          semantic: semantic,
+        ),
+      ),
+      (route) => false,
+    );
   }
 
   QueryFilter? _buildQueryFilter(bool colorful) {

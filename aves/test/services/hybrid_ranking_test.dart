@@ -166,4 +166,27 @@ void main() {
     expect(ranked.first.score, closeTo(0.5, 1e-9));
     expect(ranked.first.entryId, 2);
   });
+
+  // The banner above the grid is the only thing that tells the user their
+  // sentence was understood, so its wording is behaviour, not decoration.
+  test('the understood line names the character and the leftover meaning', () {
+    final ParsedQuery parsed = phrase(mentions: [character(), dark()]);
+    expect(describeParsedQuery(parsed), '识别到 初音未来（角色） · 黑暗，再按「黑暗」排序');
+    // Nobody in the library carries Miku: the band did nothing, and saying
+    // "sorted by character first" would be a lie.
+    expect(
+      describeParsedQuery(parsed, characterMatched: false),
+      '识别到 初音未来（角色） · 黑暗，相册里没有这些角色的标签，改按「黑暗」和画面相似度排序',
+    );
+    // No character: the two signals are peers.
+    expect(describeParsedQuery(phrase(mentions: [dark()], text: '黑暗')), '识别到 黑暗，标签与画面相似度各占一半');
+    // Nothing recognised: an empty line beats a fragment.
+    expect(describeParsedQuery(ParsedQuery(text: '像梦一样喵呜', vectorText: '像梦一样喵呜')), '');
+  });
+
+  test('a character without leftover words says only that', () {
+    final ParsedQuery parsed = ParsedQuery(text: '初音未来', mentions: [character()], vectorText: '');
+    expect(describeParsedQuery(parsed), '识别到 初音未来（角色）');
+    expect(describeParsedQuery(parsed, characterMatched: false), '识别到 初音未来（角色），相册里没有这些角色的标签，按画面相似度排序');
+  });
 }

@@ -40,6 +40,7 @@ import 'package:aves/widgets/dialogs/ai_tagging_page.dart';
 import 'package:aves/widgets/dialogs/aves_dialog.dart';
 import 'package:aves/widgets/dialogs/change_layout_dialog.dart';
 import 'package:aves/widgets/search/collection_search_page_route.dart';
+import 'package:aves/widgets/search/semantic_search_banner.dart';
 import 'package:aves/widgets/viewer/controls/notifications.dart';
 import 'package:aves_model/aves_model.dart';
 import 'package:collection/collection.dart';
@@ -214,6 +215,9 @@ class _CollectionAppBarState extends State<CollectionAppBar> with RouteAware, Si
                         actions: (context, maxWidth) => useTvLayout ? [] : _buildActions(context, selection, maxWidth),
                         bottom: Column(
                           children: [
+                            // the semantic banner goes first: it explains the
+                            // order of everything below it
+                            if (collection.semantic != null) SemanticSearchBanner(info: collection.semantic!),
                             if (useTvLayout)
                               SizedBox(
                                 height: CaptionedButton.getTelevisionButtonHeight(context),
@@ -289,6 +293,9 @@ class _CollectionAppBarState extends State<CollectionAppBar> with RouteAware, Si
     }
     if (_showQueryLine(context)) {
       height += EntryQueryBar.getPreferredHeight(textScaler);
+    }
+    if (collection.semantic != null) {
+      height += SemanticSearchBanner.preferredHeight;
     }
     return height;
   }

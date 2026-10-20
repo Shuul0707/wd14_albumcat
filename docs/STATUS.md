@@ -18,8 +18,8 @@
 | Aves fork：没有局域网时走数据线 | ✅ 已验（`tools\phone_link.cmd` = `adb reverse tcp:8899 tcp:8899`；App 侧 `resolveReachable()` 先探填的地址再退回 `http://127.0.0.1:8899`。模拟器上把发往电脑 `10.0.2.2:8899` 的出站流量 `REJECT` 掉后，25 张仍 19 写 / 0 失败，日志写「电脑端在数据线上」；删规则后又变回局域网、3.1 s。真 USB 电缆本身没验，adb 在模拟器上走 loopback） |
 | Aves fork：打标提速（自解码 448px + q88 + 批内并发） | ✅ 已量（24 张：端到端 **2.83 s**，**95 ms/张**，每张传输 43 KB。精度用同一批 24 张 A/B 量过：448/q88 vs 512 DIP/q100 是 **16/17 标签逐字相同**（唯一差异是一张界面截图里的临界角色），自解码 vs 系统取图是 **17/17 逐字相同**） |
 | Aves fork：打标中途断了，已保存的标签不丢 | ✅ 已验（一批一落盘 + 单批重试一次 + 连着 3 批失败才停。A/B：`tools\slow_proxy.py` 在第 1 批之后返回 503，电脑端同样回完 8 张 → 改前 `appTags` 新增 **0** 行、改后新增 **6** 行，且都以「完成：」收尾。另有两处防御性收口：`media_store_source.dart` 只在过期条目不超过库容 **1/4** 时才清 `appTags`，`MediaStoreImageProvider.kt` 把查询失败当「未知」而不是「空」——这两处**没有**造出真故障复现） |
-| 混合检索（标签 + 向量 + 角色优先） | ✅ **端到端验过**：`src/albumcat/tagdict.py` 把「黑暗的初音未来」切成 `hatsune_miku`(角色) + `dark`，`POST /query` 在真服务上回 512 维归一化向量（`tools\check_semantic.py` 现在 **42 项**，含 17 项 `/query`）；`tests\test_tagdict.py` 9 条钉住切词规则；`aves/lib/services/hybrid_ranking.dart` 的融合打分有 **9 条 Dart 单测**（`flutter test` 全绿）。设备上（模拟器，12 张探针图带向量）实测：搜「黑暗的博丽灵梦」→ 4 张 Reimu 排在 `0.56/0.55/0.55/0.55`，最暗的非角色图 `0.25`；搜「黑暗的初音未来」相册里没有初音 → 退回均衡权重 `0.50/0.32/0.14` 并明说「相册里没有这些角色的标签」。中文对照表 `src/albumcat/data/tag_zh.json`：9083 个标签、95.9% 有中文名、343 个系列 |
-| 语义搜索（Chinese-CLIP） | ✅ **已导出模型、已建向量、已端到端验排序**。代码在 `src/albumcat/semantic.py`、`/semantic` `/encode_text` `/query` `/semantic/model` 四个端点、Aves 侧 `appVectors` 表（schema **v18**）与端侧文本塔；`models/chinese-clip/` 下 `image_encoder.onnx` 344.9 MB、`text_encoder.onnx` 408.4 MB（单文件内嵌权重）、`vocab.txt` 21,128 行，由 `tools\export_chinese_clip_onnx.py` 从 `OFA-Sys/chinese-clip-vit-base-patch16` 导出（700 MB 不进仓库）。设备侧已验：v17→v18 升级保住 12 行旧标签；重跑打标写入 12 行 512 维 float32 向量；「语义搜索」按钮从灰变亮；搜索结果的第二轮文字会写出它听懂了什么。18 条 pytest 覆盖向量打包 / 余弦 / WordPiece 分词 / 缺模型降级，42 项契约分别钉住「有模型」与「没模型」两条路径 |
+| 混合检索（标签 + 向量 + 角色优先） | ✅ **端到端验过，且已并进原生搜索框**（Aves 的搜索框直接吃自然语言，回车进网格；不再有单独的语义搜索页/对话框。输入带 `tag:` `#` `@` `rating>` 等 Aves 查询语法时照旧走原生筛选，电脑端连不上就提示一句并回落原生筛选）。`src/albumcat/tagdict.py` 把「黑暗的初音未来」切成 `hatsune_miku`(角色) + `dark`，`POST /query` 在真服务上回 512 维归一化向量（`tools\check_semantic.py` 现在 **42 项**，含 17 项 `/query`）；`tests\test_tagdict.py` 9 条钉住切词规则；`aves/lib/services/hybrid_ranking.dart` 的融合打分与文案有 **11 条 Dart 单测**（`flutter test` 全绿）。设备上（模拟器，12 张探针图带向量）实测：搜「黑暗的博丽灵梦」→ 4 张 Reimu 排在 `0.56/0.55/0.55/0.55`，最暗的非角色图 `0.25`，视口里从第 1 张往后滑的顺序是 **4 张 Reimu → 3 张 Aya → 2 张 Hina → 3 张 Teto**（与网格一致）；搜「黑暗的初音未来」相册里没有初音 → 退回均衡权重 `0.50/0.32/0.14` 并明说「相册里没有这些角色的标签」。结果页横幅写的就是这句话。中文对照表 `src/albumcat/data/tag_zh.json`：9083 个标签、95.9% 有中文名、343 个系列 |
+| 语义搜索（Chinese-CLIP） | ✅ **已导出模型、已建向量、已端到端验排序**。代码在 `src/albumcat/semantic.py`、`/semantic` `/encode_text` `/query` `/semantic/model` 四个端点、Aves 侧 `appVectors` 表（schema **v18**）与端侧文本塔；`models/chinese-clip/` 下 `image_encoder.onnx` 344.9 MB、`text_encoder.onnx` 408.4 MB（单文件内嵌权重）、`vocab.txt` 21,128 行，由 `tools\export_chinese_clip_onnx.py` 从 `OFA-Sys/chinese-clip-vit-base-patch16` 导出（700 MB 不进仓库）。设备侧已验：v17→v18 升级保住 12 行旧标签；重跑打标写入 12 行 512 维 float32 向量；向量建好后搜索框自动「按意思搜」（建议行给出「按意思搜「黑暗的初音未来」」，回车进结果页），结果页顶上的横幅写出听懂了什么。18 条 pytest 覆盖向量打包 / 余弦 / WordPiece 分词 / 缺模型降级，42 项契约分别钉住「有模型」与「没模型」两条路径 |
 | 核心引擎（推理/规则/插件/发布/撤销） | ✅ 代码完成 |
 | 模型下载、依赖安装、DirectML 后端 | ✅ 就绪 |
 | 首次真实推理（预处理契约验证） | ✅ 通过（纯色/渐变图给出 `Monochrome`/`no Humans` 等应有标签） |
@@ -35,7 +35,8 @@
   换手机也不会跟着走。
 - **fork 基于上游 Aves 1.15.5**，改动落在 **11 个新文件 + 三十来个已有文件**上（逐条清单见
   [aves/FORK.md](../aves/FORK.md)「相对上游改了什么」：数据模型与两张新表、5 个回写调用点、
-  设置与服务、打标页与语义搜索页，以及 Kotlin 侧为「质量换体积」「自己解图」「端侧文本塔」新开的
+  设置与服务、打标页与搜索框里的语义排序（`collection_search_delegate.dart` + `semantic_search_banner.dart`），
+  以及 Kotlin 侧为「质量换体积」「自己解图」「端侧文本塔」新开的
   `jpegQuality` / `getByDecoding()` / `TextEncoderHandler`——`BitmapUtils.kt` + `DebugHandler.kt` +
   `ThumbnailFetcher.kt`；另有构建配置若干，`pubspec.lock` 占了大头）；
   上游更新后要 rebase。验证只做到「模拟器 + Aves 1.15.5 libre」，换设备换版本要重量一遍。

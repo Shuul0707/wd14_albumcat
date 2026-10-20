@@ -10,6 +10,7 @@ import 'package:aves/model/selection.dart';
 import 'package:aves/model/settings/settings.dart';
 import 'package:aves/model/source/collection_lens.dart';
 import 'package:aves/model/source/collection_source.dart';
+import 'package:aves/services/hybrid_ranking.dart';
 import 'package:aves/theme/durations.dart';
 import 'package:aves/view/view.dart';
 import 'package:aves/widgets/collection/collection_grid.dart';
@@ -37,6 +38,17 @@ class const CollectionPage({
   required final CollectionSource source,
   required final Set<CollectionFilter?>? filters,
   final bool Function(AvesEntry element)? highlightTest,
+
+  /// Entries to show in this exact order, instead of everything the source has.
+  ///
+  /// A semantic search hands the page its ranking this way: the collection grid,
+  /// the app bar and the selection gestures stay the ones users already know,
+  /// only the contents and the order come from relevance instead of date.
+  final List<AvesEntry>? fixedSelection,
+  final bool fixedSort = false,
+
+  /// Set when the page is showing a semantic ranking, to explain what it found.
+  final SemanticSearchInfo? semantic,
 }) extends StatefulWidget {
   static const routeName = '/collection';
 
@@ -56,6 +68,9 @@ class _CollectionPageState extends State<CollectionPage> {
     _collection = CollectionLens(
       source: widget.source,
       filters: widget.filters,
+      fixedSort: widget.fixedSort,
+      fixedSelection: widget.fixedSelection,
+      semantic: widget.semantic,
     );
     super.initState();
     _subscriptions.add(
@@ -87,7 +102,7 @@ class _CollectionPageState extends State<CollectionPage> {
         selector: (context, selection) => (selection.isSelecting, selection.selectedItemCount),
         builder: (context, selectionResult, child) {
           final (isSelecting, selectedItemCount) = selectionResult;
-          final body = QueryProvider(
+          final grid = QueryProvider(
             startEnabled: settings.getShowTitleQuery(context.currentRouteName!),
             initialQuery: liveFilter?.query,
             child: Builder(
@@ -118,6 +133,10 @@ class _CollectionPageState extends State<CollectionPage> {
             ),
           );
 
+          // The collection lens carries `widget.semantic`, and the app bar reads
+          // it from there to explain the ranking: the app bar is a sliver inside
+          // the grid, so the explanation has to live where the chips do.
+
           Widget page;
           if (useTvLayout) {
             page = AvesScaffold(
@@ -127,7 +146,7 @@ class _CollectionPageState extends State<CollectionPage> {
                     controller: context.read<TvRailController>(),
                     currentCollection: _collection,
                   ),
-                  Expanded(child: body),
+                  Expanded(child: grid),
                 ],
               ),
               resizeToAvoidBottomInset: false,
@@ -146,7 +165,7 @@ class _CollectionPageState extends State<CollectionPage> {
                     return false;
                   },
                   child: AvesScaffold(
-                    body: body,
+                    body: grid,
                     floatingActionButton: _buildFab(context, isSelecting, selectedItemCount),
                     drawer: canNavigate ? AppDrawer(currentCollection: _collection) : null,
                     bottomNavigationBar: showBottomNavigationBar

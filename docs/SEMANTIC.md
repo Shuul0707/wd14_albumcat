@@ -235,7 +235,7 @@ CREATE TABLE appVectors(
   id      INTEGER PRIMARY KEY,   -- entry id，与 appTags 对齐
   model   TEXT,                  -- 'chinese-clip-vit-base-patch16'
   dim     INTEGER,               -- 512
-  vector  BLOB,                  -- float16，1024 字节
+  vector  BLOB,                  -- float32，2048 字节（512 维 × 4；端侧写入的就是 float32）
   updated INTEGER                -- 秒级时间戳，便于增量重建
 )
 ```
@@ -243,12 +243,18 @@ CREATE TABLE appVectors(
 `model` 写进表里是有意为之：换了图像塔之后，旧向量必须能被识别出来并重建，
 而不是被静默地拿去和新文本向量比（两者不在同一空间，算出来的分数毫无意义）。
 
-搜索流程：
+搜索流程（**入口就是 Aves 原来的搜索框，没有单独的语义搜索页面**）：
 
-1. 读 `appVectors` 全部向量到内存（1 万张 × 1 KB ≈ 10 MB，可接受）；
-2. 查询词编码成向量（端侧或 `/encode_text`）；
-3. 余弦点积 → 排序 → 取 top-N → 拿 entry id 去查 Aves 的条目；
-4. 结果页显示相似度（0–1），低于阈值（默认 0.2）的过滤掉。
+1. 在搜索框输入一句话，建议列表里多出一行「按意思搜「黑暗的初音未来」」（`_semanticWorthy` 为真时）；
+2. 回车 → `CollectionSearchDelegate.buildResults` 走语义路径：`AiTaggingService.resolveReachable`
+   探到电脑端地址（局域网或数据线）→ `POST /query` 切标签 + 编码 → 读 `appVectors` 全部向量算余弦；
+3. `hybrid_ranking.dart` 融合打分（见 §6），取前 120 条；
+4. push 一个普通 `CollectionPage`，用 `CollectionLens(fixedSort: true, fixedSelection: [...])`
+   按相关度原样展示——网格、多选、详情页全部沿用原生，**不另做结果列表**；
+5. app bar 底部那一条横幅（`SemanticSearchBanner`）写出听懂了什么和命中张数，`CollectionLens.copyWith`
+   会把 `fixedSort`/`fixedSelection` 一起带给 viewer，所以点开第一张往后滑的顺序与网格一致；
+6. 输入里带 `tag:` `#` `@` `rating>` 或纯数字评分时判为 Aves 自己的语法，直接走原生 `QueryFilter`；
+   电脑端连不上时提示一句并回落原生筛选，不会白屏。
 
 性能：1 万条 512 维点积在手机上约 5–15 ms，搜索本身不是瓶颈，**编码才是**。
 
@@ -312,9 +318,11 @@ CREATE TABLE appVectors(
 | --- | --- |
 | `src/albumcat/tagdict.py` | 解析：最长匹配切词，识别角色 / 系列 / 普通标签 / 分级 |
 | `src/albumcat/data/tag_zh.json` | 中文对照表（见下一节） |
-| `aves/lib/services/hybrid_ranking.dart` | 融合打分，纯 Dart，无 Flutter 依赖，可单测 |
+| `aves/lib/services/hybrid_ranking.dart` | 融合打分 + 「听懂了什么」的文案，纯 Dart，无 Flutter 依赖，可单测 |
 | `aves/lib/services/semantic_search_service.dart` | `query()` 调 `/query`；`searchHybrid()` 取向量再交给融合 |
-| `aves/test/services/hybrid_ranking_test.dart` | 7 个测试，钉住上面每一条规则 |
+| `aves/lib/widgets/search/collection_search_delegate.dart` | 搜索框入口：`_semanticWorthy` 判定、建议行、`_selectSemantic` |
+| `aves/lib/widgets/search/semantic_search_banner.dart` | 结果页 app bar 底部那一条说明横幅 |
+| `aves/test/services/hybrid_ranking_test.dart` | 11 个测试，钉住上面每一条规则与每一句文案 |
 
 ---
 
@@ -391,11 +399,12 @@ python tools/build_tag_zh.py
 两者是并列入口，混合检索是第三条路：
 
 - **精确找**「某个角色的所有图」→ Tags 页（WD14 标签，零延迟，可离线）；
-- **模糊找**「下雨的街道」「有海的照片」→ 语义搜索，纯向量；
-- **又准又糊**「黑暗的初音未来」「东方里的金发角色」→ 混合同一个搜索框，
+- **模糊找**「下雨的街道」「有海的照片」→ 搜索框里写自然语言，纯向量；
+- **又准又糊**「黑暗的初音未来」「东方里的金发角色」→ 同一个搜索框，
   标签与向量自动分工。
 
 打标那一趟顺带就把向量建好了（`include_vector: true`），不需要再跑一遍全库。
+两处都是 Aves 原生的界面（Tags 页不进图片文件；搜索框就是原来的搜索框），没有额外页面。
 
 ---
 
