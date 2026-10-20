@@ -489,23 +489,20 @@ class AiTaggingService {
   }
 
   static Map<String, dynamic> _decode(http.Response response) {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      // A 503 here usually means "semantic model missing", which is a warning
-      // rather than a failed batch, so surface the server's message verbatim.
-      String detail;
-      try {
-        final body = jsonDecode(utf8.decode(response.bodyBytes));
-        detail = body is Map && body['error'] != null ? '${body['error']}' : '${response.body}';
-      } catch (_) {
-        detail = '${response.body}';
-      }
-      throw AiTaggingException('电脑端返回 ${response.statusCode}：$detail');
-    }
     if (response.statusCode == 401) {
       throw const AiTaggingException('令牌不对。电脑端用 --token 启动时，手机这里要填同一个令牌。');
     }
     if (response.statusCode != 200) {
-      throw AiTaggingException('电脑端返回 HTTP ${response.statusCode}：${_short(response.body)}');
+      // The service puts a human-readable reason in `error` (e.g. "text tower
+      // not loaded" on a 503). Prefer it over dumping raw JSON at the user.
+      String? reason;
+      try {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        if (body is Map && body['error'] != null) reason = '${body['error']}';
+      } catch (_) {
+        // not JSON: fall back to the truncated body below
+      }
+      throw AiTaggingException('电脑端返回 HTTP ${response.statusCode}：${reason ?? _short(response.body)}');
     }
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
     if (decoded is! Map) throw AiTaggingException('电脑端返回的不是 JSON 对象：${_short(response.body)}');
