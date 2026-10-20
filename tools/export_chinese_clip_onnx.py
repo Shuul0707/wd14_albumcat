@@ -48,24 +48,43 @@ def export(model_id: str, out_dir: Path, opset: int, max_text_length: int) -> No
     processor = ChineseCLIPProcessor.from_pretrained(model_id)
 
     class ImageTower(torch.nn.Module):
+        """vision_model -> pooled CLS -> visual_projection (= 512-d).
+
+        Deliberately not `get_image_features()`: in transformers 5.x that
+        helper's return shape changed (it hands back the full hidden state in
+        some versions), which silently exports a graph whose output is
+        197x768 instead of 512 and still "runs" — the vectors just never
+        match the text tower's space.
+        """
+
         def __init__(self, inner):
             super().__init__()
             self.inner = inner
 
         def forward(self, pixel_values):
-            return self.inner.get_image_features(pixel_values=pixel_values)
+            out = self.inner.vision_model(pixel_values=pixel_values)
+            pooled = getattr(out, "pooler_output", None)
+            if pooled is None:
+                pooled = out[1] if isinstance(out, (tuple, list)) else out.last_hidden_state[:, 0]
+            return self.inner.visual_projection(pooled)
 
     class TextTower(torch.nn.Module):
+        """text_model -> pooled CLS -> text_projection (= 512-d)."""
+
         def __init__(self, inner):
             super().__init__()
             self.inner = inner
 
         def forward(self, input_ids, attention_mask, token_type_ids):
-            return self.inner.get_text_features(
+            out = self.inner.text_model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
             )
+            pooled = getattr(out, "pooler_output", None)
+            if pooled is None:
+                pooled = out[1] if isinstance(out, (tuple, list)) else out.last_hidden_state[:, 0]
+            return self.inner.text_projection(pooled)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     size = 224
@@ -101,16 +120,21 @@ def export(model_id: str, out_dir: Path, opset: int, max_text_length: int) -> No
     )
 
     vocab_path = out_dir / "vocab.txt"
-    try:
-        processor.tokenizer.save_vocabulary(str(out_dir))
-        produced = out_dir / "vocab.txt"
-        if not produced.exists():
-            # some versions write `vocab.txt` under a subdirectory
-            for candidate in out_dir.rglob("vocab.txt"):
+    # Some transformers versions write `vocab.txt`, others `tokenizer.model`.
+    # The runtime tokenizer reads a plain vocab.txt, so make sure it exists.
+    source_vocab = Path(model_id) / "vocab.txt"
+    if source_vocab.exists():
+        vocab_path.write_bytes(source_vocab.read_bytes())
+        print(f"  vocab.txt copied from {source_vocab}")
+    else:
+        try:
+            processor.tokenizer.save_vocabulary(str(out_dir))
+        except Exception as exc:  # noqa: BLE001
+            print(f"warning: could not save vocab ({exc}); copy it from the HF repo by hand")
+        for candidate in out_dir.rglob("vocab.txt"):
+            if candidate != vocab_path:
                 candidate.replace(vocab_path)
                 break
-    except Exception as exc:  # noqa: BLE001
-        print(f"warning: could not save vocab ({exc}); copy it from the HF repo by hand")
     if not vocab_path.exists():
         print("warning: vocab.txt missing — the text tower will not load")
 
