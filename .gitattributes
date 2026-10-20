@@ -1,0 +1,23 @@
+# 仓库里一律存 LF，检出时按下面的规则还原
+* text=auto eol=lf
+
+# Windows 上的入口脚本必须能双击 / 被 cmd.exe 正常解析（LF 会让 goto / call :label 出错）
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制，别做行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.onnx binary
+*.apk binary
+*.aab binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.zip binary
