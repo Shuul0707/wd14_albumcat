@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:aves/model/app_ocr.dart';
 import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/images.dart';
@@ -21,6 +22,8 @@ class AiTaggingOutcome {
   final bool needsReview;
   /// Chinese-CLIP embedding for this photo, when the service had a model.
   final AppVector? vector;
+  /// Text printed on the photo, when OCR was asked for and found any.
+  final AppOcr? ocr;
   final String? error;
 
   const new({
@@ -31,6 +34,7 @@ class AiTaggingOutcome {
     this.characters = const {},
     this.needsReview = false,
     this.vector,
+    this.ocr,
     this.error,
   });
 
@@ -308,6 +312,9 @@ class AiTaggingService {
         // Float32 so the phone can read it straight into a Float32List
         // instead of decoding half-floats by hand.
         'vector_dtype': 'float32',
+        // OCR costs seconds per photo, so it is its own flag: asking for it on
+        // every photo would make a tagging run ten times slower.
+        'include_ocr': true,
       });
     }
     return (payload: payload, carried: carried, failures: failures);
@@ -393,6 +400,7 @@ class AiTaggingService {
         ),
         needsReview: raw['needs_review'] == true,
         vector: _parseVector(raw['semantic']),
+        ocr: _parseOcr(raw['ocr']),
       ));
     }
     return outcomes;
@@ -457,6 +465,19 @@ class AiTaggingService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Same rule as the vector: a malformed OCR block must not cost the tags.
+  /// ``null`` is also the normal answer -- most illustrations have no text.
+  static AppOcr? _parseOcr(Object? raw) {
+    if (raw is! Map) return null;
+    final text = raw['text'];
+    if (text is! String || text.isEmpty) return null;
+    return AppOcr(
+      engine: '${raw['engine'] ?? ''}',
+      text: text,
+      updated: DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   static Set<String> _stringSet(Object? raw) {

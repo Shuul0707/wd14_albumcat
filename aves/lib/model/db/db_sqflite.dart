@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:aves/model/app_ocr.dart';
 import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/db/db.dart';
@@ -38,6 +39,7 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
   static const debugTable = SqfliteLocalMediaDbSchema.debugTable;
   static const appTagTable = SqfliteLocalMediaDbSchema.appTagTable;
   static const appVectorTable = SqfliteLocalMediaDbSchema.appVectorTable;
+  static const appOcrTable = SqfliteLocalMediaDbSchema.appOcrTable;
 
   static const _entryInsertSliceMaxCount = 10000; // number of entries
   static const _queryCursorBufferSize = 1000; // number of rows
@@ -52,7 +54,7 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
       await path,
       onCreate: (db, version) => SqfliteLocalMediaDbSchema.createLatestVersion(db),
       onUpgrade: LocalMediaDbUpgrader.upgradeDb,
-      version: 18,
+      version: 19,
     );
 
     final maxIdRows = await _db.rawQuery('SELECT MAX(id) AS maxId FROM $entryTable');
@@ -620,6 +622,96 @@ class SqfliteLocalMediaDb implements LocalMediaDb {
     final batch = _db.batch();
     ids.forEach((id) => batch.delete(appVectorTable, where: 'id = ?', whereArgs: [id]));
     await batch.commit(noResult: true);
+  }
+
+  //
+  // OCR text
+  //
+  // Same contract as the tags and the vector: owned by the DB, never written
+  // back to a file. A row is disposable -- re-running OCR rebuilds it.
+
+  @override
+  Future<void> clearAppOcr() async {
+    final count = await _db.delete(appOcrTable, where: '1');
+    debugPrint('$runtimeType clearAppOcr deleted $count rows');
+  }
+
+  @override
+  Future<Map<int, AppOcr>> loadAppOcr() async {
+    final result = <int, AppOcr>{};
+    final cursor = await _db.queryCursor(appOcrTable, bufferSize: _queryCursorBufferSize);
+    while (await cursor.moveNext()) {
+      final row = cursor.current;
+      final id = row['id'] as int?;
+      if (id == null) continue;
+      final value = AppOcr.fromRow(row, id: id);
+      if (value != null) result[id] = value;
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveAppOcr(Map<int, AppOcr> rows) async {
+    if (rows.isEmpty) return;
+    final batch = _db.batch();
+    rows.forEach((id, value) => batch.insert(
+          appOcrTable,
+          value.toRow(id),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        ));
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<void> removeAppOcr(Set<int> ids) async {
+    if (ids.isEmpty) return;
+    final batch = _db.batch();
+    ids.forEach((id) => batch.delete(appOcrTable, where: 'id = ?', whereArgs: [id]));
+    await batch.commit(noResult: true);
+  }
+
+  @override
+  Future<List<AppOcrHit>> searchAppOcr(String query, {int limit = 200}) async {
+    final needle = query.trim();
+    if (needle.isEmpty) return const [];
+
+    // A user typing "50%" or "a_b" means those characters literally; without
+    // escaping, LIKE would treat them as wildcards and match almost anything.
+    // A literal backslash is written '\\' in Dart source, so the escape
+    // character is one backslash once the string is built. Raw strings cannot
+    // be used here: in Dart a raw string may not end with a backslash, because
+    // that would escape the closing quote.
+    final escaped = needle
+        .replaceAll('\\', '\\\\')
+        .replaceAll('%', '\\%')
+        .replaceAll('_', '\\_');
+
+    final rows = await _db.rawQuery(
+      'SELECT id, text FROM $appOcrTable'
+      " WHERE text LIKE ? ESCAPE '\\'"
+      ' ORDER BY updated DESC LIMIT ?',
+      ['%${escaped}%', limit],
+    );
+
+    final hits = <AppOcrHit>[];
+    for (final row in rows) {
+      final id = row['id'] as int?;
+      final text = row['text'] as String?;
+      if (id == null || text == null) continue;
+      hits.add(AppOcrHit(id: id, line: _matchingLine(text, needle)));
+    }
+    return hits;
+  }
+
+  /// The line that actually contains [query], so the result grid can say why
+  /// a photo matched. Falls back to the first line when the match spans lines.
+  static String _matchingLine(String text, String needle) {
+    final lowerNeedle = needle.toLowerCase();
+    for (final line in text.split('\n')) {
+      if (line.toLowerCase().contains(lowerNeedle)) return line.trim();
+    }
+    final first = text.split('\n').first.trim();
+    return first.length > 60 ? '${first.substring(0, 60)}…' : first;
   }
 
   // covers

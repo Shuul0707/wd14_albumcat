@@ -1,4 +1,5 @@
 import 'package:aves/locale/calendar/calendar_utils.dart';
+import 'package:aves/model/app_ocrs.dart';
 import 'package:aves/model/dynamic_albums.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/filters/aspect_ratio.dart';
@@ -141,6 +142,7 @@ class CollectionSearchDelegate extends AvesSearchDelegate with FeedbackMixin, Va
                       focusNode: _suggestionsTopFocusNode,
                     ),
                     if (_semanticWorthy) _buildSemanticRow(context),
+                    if (_ocrWorthy) _buildOcrRow(context),
                     _buildFilterRow(
                       context: context,
                       filters: [
@@ -413,6 +415,88 @@ class CollectionSearchDelegate extends AvesSearchDelegate with FeedbackMixin, Va
           ],
         ),
       ),
+    );
+  }
+
+  /// Whether this search could match text printed on the photos.
+  ///
+  /// Deliberately separate from [_semanticWorthy]: text is a substring match in
+  /// the phone's own database, so it works with the PC switched off -- and it is
+  /// the one route that answers "which photo has this written on it" exactly
+  /// rather than approximately.
+  bool get _ocrWorthy {
+    final text = query.trim();
+    // A single character matches a large share of any library, which is noise
+    // rather than a search. Two is the shortest useful query in Chinese.
+    if (text.length < 2) return false;
+    if (!appOcrs.hasText) return false;
+    return !_looksLikeAvesQuery(text);
+  }
+
+  /// Advertises the text route the same way the semantic one is advertised:
+  /// pressing Enter still runs Aves' own query, so the user opts in by tapping.
+  Widget _buildOcrRow(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.secondary;
+    return InkWell(
+      onTap: () => _selectOcr(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(AIcons.search, size: 20, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '搜图片上的文字「${query.trim()}」',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectOcr(BuildContext context) async {
+    final text = query.trim();
+    final hits = await appOcrs.search(text);
+    if (!context.mounted) return;
+    if (hits.isEmpty) {
+      showFeedback(context, FeedbackType.warn, '没有照片写着「$text」');
+      return;
+    }
+    // Keep the order the database returned: re-sorting by date here would make
+    // "best match" a lie, and the grid is the only place the ranking shows.
+    final byId = {
+      for (final entry in (parentCollection?.sortedEntries ?? source.visibleEntries)) entry.id: entry,
+    };
+    final entries = [
+      for (final hit in hits)
+        if (byId[hit.id] != null) byId[hit.id]!,
+    ];
+    if (entries.isEmpty) {
+      showFeedback(context, FeedbackType.warn, '找到了文字，但那些照片不在当前视图里');
+      return;
+    }
+    _jumpToFixedPage(context, entries);
+  }
+
+  void _jumpToFixedPage(BuildContext context, List<AvesEntry> entries) {
+    clean();
+    Navigator.maybeOf(context)?.pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: CollectionPage.routeName),
+        builder: (context) => CollectionPage(
+          source: source,
+          filters: const {},
+          fixedSelection: entries,
+          fixedSort: true,
+        ),
+      ),
+      (route) => false,
     );
   }
 

@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:aves/model/app_tags.dart';
+import 'package:aves/model/app_ocr.dart';
+import 'package:aves/model/app_ocrs.dart';
 import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/entry/entry.dart';
@@ -118,6 +120,7 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
       Future<void> save(List<AiTaggingOutcome> outcomes) async {
         final writes = <int, Set<String>>{};
         final vectors = <int, AppVector>{};
+        final ocrs = <int, AppOcr>{};
         for (final outcome in outcomes) {
           if (!outcome.ok) {
             failed++;
@@ -125,6 +128,8 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
           }
           final vector = outcome.vector;
           if (vector != null) vectors[outcome.entryId] = vector;
+          final ocr = outcome.ocr;
+          if (ocr != null) ocrs[outcome.entryId] = ocr;
           final selection = outcome.selectTags(includeGeneral: _includeGeneral);
           if (selection.isEmpty) {
             empty++;
@@ -137,6 +142,9 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
         // Vectors are stored even when no tag was published: a photo the tagger
         // had nothing to say about is still searchable by meaning.
         if (vectors.isNotEmpty) await appVectors.saveById(vectors);
+        // Same reasoning: a photo with text but no publishable tag is still
+        // findable by what it says.
+        if (ocrs.isNotEmpty) await appOcrs.saveById(ocrs);
       }
 
       await AiTaggingService.tag(

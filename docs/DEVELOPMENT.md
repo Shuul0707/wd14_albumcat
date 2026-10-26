@@ -158,3 +158,28 @@ albumcat/
 ---
 
 [← 回到 README](../README.md)
+
+---
+
+## 新增 Dart 文件时，记得加进 CI 清单
+
+`.github/workflows/flutter.yml` 里的 `dart analyze` 只分析**明确列出的文件**，
+不是整个 `lib/`。这么设计是为了不跑上游那几百个文件的告警。
+
+代价是：**新文件不进清单，就永远不会被检查**。PR #1 正是这样漏掉三处编译错误的
+—— `dart analyze` 一分钟就能抓到，但那些文件不在清单里。
+
+所以新增 Dart 文件时，同步改这个清单。目前需要补的是：
+
+```
+lib/model/app_ocr.dart
+lib/model/app_ocrs.dart
+lib/widgets/search/collection_search_delegate.dart
+```
+
+另外 `lib/widgets/dialogs/semantic_search_page.dart` 已经在 5c85490 里被删掉
+（语义搜索并入原生搜索框），但清单还留着它，`dart analyze` 会直接报"文件不存在"。
+这一条顺手改一下。
+
+> 推送账号没有 GitHub 的 `workflow` scope，改不了 `.github/workflows/*`，
+> 所以上面这几行需要维护者手动同步，或者换一个有该 scope 的 token 推送。
