@@ -35,12 +35,14 @@ jobs:
             lib/model/app_tags.dart \
             lib/model/app_vector.dart \
             lib/model/app_vectors.dart \
+            lib/model/app_ocr.dart \
+            lib/model/app_ocrs.dart \
             lib/services/ai_tagging_service.dart \
             lib/services/semantic_search_service.dart \
             lib/services/on_device_text_encoder.dart \
             lib/services/android_debug_service.dart \
             lib/widgets/dialogs/ai_tagging_page.dart \
-            lib/widgets/dialogs/semantic_search_page.dart \
+            lib/widgets/search/collection_search_delegate.dart \
             lib/model/settings/modules/ai_tagging.dart \
             lib/model/entry/extensions/metadata_edition.dart \
             lib/model/db/db_sqflite.dart \
