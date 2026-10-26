@@ -176,3 +176,19 @@ albumcat/
 
 ）。两个办法：给 token 补 scope（`gh auth refresh -s workflow`），或者直接用 SSH 推
 —— SSH key 没有 scope 概念，一次就能过。
+
+**另外一个坑：这个 workflow 是手动触发的。**
+
+```yaml
+on:
+  workflow_dispatch:
+```
+
+理由是 `flutter pub get` + `analyze` 要几分钟和几百 MB，不值得每个 push 都跑。
+
+后果是：**PR 上的 CI 绿了，只代表 Python 测试过了，Dart 侧一行都没检查。**
+改过 `aves/` 的分支，合并前要去 Actions → flutter → Run workflow 手动跑一次。
+
+这解释了一个现象：PR #1 的检查全绿，但仍然带着三处编译错误。不是 CI 没发现，
+是 CI 根本没跑。
+
