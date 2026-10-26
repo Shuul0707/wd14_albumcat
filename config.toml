@@ -125,3 +125,25 @@ dtype = "float16"
 
 max_text_length = 52
 model_id = "chinese-clip-vit-base-patch16"
+
+
+# --------------------------------------------------------------------------- #
+# OCR: read the text printed on a photo ("初音未来 演唱会 2026")
+# --------------------------------------------------------------------------- #
+[ocr]
+# Engine is RapidOCR -- the same one Umi-OCR wraps in a desktop app. Models ship
+# inside the Python package, so there is nothing to download and no model dir.
+#
+# This is the slowest thing here: 2.5-5.5 s per photo on CPU, against 0.1-0.6 s
+# for tagging. Hence opt-in per request: the phone sends `include_ocr: true`
+# only for the photos it wants searchable by text.
+enabled = true
+
+# Longest edge fed to the detector. The detector walks the whole image, so a
+# 4K poster costs about four times a 1600px one while the text stays readable.
+max_side = 1600
+
+# Drop fragments below this confidence. Stylised anime lettering makes OCR
+# invent characters; a wrong word in the index shows the user a photo they never
+# asked for, which is worse than showing none.
+min_score = 0.5

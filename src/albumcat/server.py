@@ -68,6 +68,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .config import Config
+from .ocr import OcrEngine
 from .pipeline import Pipeline, load_tagger
 from .semantic import (
     SemanticEncoder,
@@ -116,6 +117,11 @@ class TaggingService:
         # Chinese-CLIP is optional: a missing model leaves `available` False and
         # the tagging endpoints keep working exactly as before.
         self.semantic = SemanticEncoder(config.semantic)
+        self.ocr = OcrEngine(config.ocr)
+        # OCR is keyed by image digest and cached separately from the tag
+        # payload: the tag payload must stay byte-identical for clients that
+        # never asked for text.
+        self._ocr_cache: dict[str, dict | None] = {}
         self._lock = threading.Lock()
         self._cache: dict[str, dict] = {}
         self._cache_order: list[str] = []
@@ -154,6 +160,7 @@ class TaggingService:
             "plugins": plugins,
             "plugin_errors": plugin_errors,
             "semantic": self.semantic.info().to_dict(),
+            "ocr": self.ocr.info().to_dict(),
             "uptime_s": round(time.time() - self.started, 1),
             "cache": {"entries": len(self._cache), "hits": self.cache_hits},
         }
@@ -182,6 +189,7 @@ class TaggingService:
                 "dim": self.config.semantic.dim,
                 "dtype": self.config.semantic.dtype,
             },
+            "ocr": self.ocr.info().to_dict(),
         }
 
     # -- work -------------------------------------------------------------- #
@@ -203,12 +211,16 @@ class TaggingService:
         date_taken: int = 0,
         use_cache: bool = True,
         include_vector: bool = False,
+        include_ocr: bool = False,
         vector_dtype: str | None = None,
     ) -> dict:
         """Tag one already-encoded image and return the finished tag set.
 
         With ``include_vector`` the response also carries the Chinese-CLIP
         embedding for this photo, so a tagging run doubles as an indexing run.
+        With ``include_ocr`` it also carries the text printed on the photo --
+        a separate flag because OCR costs 2.5-5.5 s against 0.1-0.6 s for the
+        tagging itself, and most photos have no text at all.
         ``vector_dtype`` overrides the configured wire format per request --
         a client that can memory-map float32 (``Float32List.view``) asks for
         that instead of decoding half-floats by hand.
@@ -227,7 +239,10 @@ class TaggingService:
             cached["cached"] = True
             # report the cache lookup, not the inference that filled it
             cached["ms"] = round((time.perf_counter() - started) * 1000, 2)
-            return self._with_vector_policy(cached, include_vector, dtype)
+            result = self._with_vector_policy(cached, include_vector, dtype)
+            if include_ocr:
+                result["ocr"] = self._ocr_cache.get(digest)
+            return result
 
         try:
             with Image.open(io.BytesIO(data)) as im:
@@ -241,6 +256,10 @@ class TaggingService:
         with self._lock:
             plan, tagset = self.pipeline.plan_image(image, asset_id=asset_id, path=name)
             semantic_block = self._semantic_block(image, dtype)
+            # OCR shares the lock even though it runs on CPU: two phones
+            # syncing at once would otherwise start two OCR jobs per core and
+            # make the tagging in between feel frozen.
+            ocr_block = self._ocr_cached(digest, image) if include_ocr else None
 
         flat, hierarchical = plan_to_tag_fields(plan, self.config.publish)
         star = plan.star_rating if self.config.publish.write_star_rating else None
@@ -277,6 +296,7 @@ class TaggingService:
             "ratings": {k: round(v, 4) for k, v in tagset.ratings.items()},
             # the phone stores this next to the tags; see docs/SEMANTIC.md
             "semantic": semantic_block,
+
             "engine": {
                 "model": Path(self.config.model.dir).name,
                 "device": self.config.model.device,
@@ -288,7 +308,45 @@ class TaggingService:
         }
         if use_cache:
             self._remember(digest, payload)
-        return self._with_vector_policy(payload, include_vector, dtype)
+        result = self._with_vector_policy(payload, include_vector, dtype)
+        if include_ocr:
+            # appended after caching: the stored payload stays OCR-free, so a
+            # later client that does not want text gets the old shape back
+            result["ocr"] = ocr_block
+        return result
+
+    # -- ocr --------------------------------------------------------------- #
+
+    def _ocr_cached(self, digest: str, image) -> dict | None:
+        """OCR one image, memoised by digest.
+
+        OCR is 2.5-7 s per photo, so re-running it for a photo we already read
+        would make a second sync feel broken. ``None`` is cached as well: most
+        illustrations genuinely have no text, and re-checking them every run
+        would be the slowest possible way to learn the same answer.
+        """
+        if digest in self._ocr_cache:
+            return self._ocr_cache[digest]
+        block = self.ocr.read(image)
+        result = (
+            None
+            if block is None
+            else {
+                "text": block["text"],
+                "lines": block["lines"],
+                "engine": block["engine"],
+                "ms": block["ms"],
+            }
+        )
+        if len(self._ocr_cache) > 4096:
+            self._ocr_cache.clear()
+        self._ocr_cache[digest] = result
+        return result
+
+    def ocr_info(self) -> dict:
+        info = self.ocr.info().to_dict()
+        info["ok"] = True
+        return info
 
     # -- semantic ---------------------------------------------------------- #
 
@@ -444,6 +502,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/semantic":
             self._send(200, self.service.semantic_info())
             return
+        if path == "/ocr":
+            self._send(200, self.service.ocr_info())
+            return
         if path == "/semantic/model":
             self._send_model()
             return
@@ -507,6 +568,7 @@ class _Handler(BaseHTTPRequestHandler):
             date_taken=int(obj.get("date_taken") or 0),
             use_cache=bool(obj.get("cache", True)),
             include_vector=bool(obj.get("include_vector", False)),
+            include_ocr=bool(obj.get("include_ocr", False)),
             vector_dtype=(str(obj["vector_dtype"]) if obj.get("vector_dtype") else None),
         )
 

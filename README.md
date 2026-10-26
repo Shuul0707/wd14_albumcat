@@ -204,6 +204,7 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
 | [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP 向量 + 中文标签对照表 + 混合检索（「黑暗的初音未来」怎么排） |
+| [图片文字识别](docs/OCR.md) | OCR 把图上的字变成可搜索索引：按张开启、实测耗时、手机端怎么搜 |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |
 | [参与开发](CONTRIBUTING.md) | 环境、改完怎么验、代码风格、跟着上游升级、许可 |
 | [aves/FORK.md](aves/FORK.md) | 手机端 fork：相对上游改了什么、怎么构建、怎么升上游 |
