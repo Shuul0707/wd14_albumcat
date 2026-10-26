@@ -29,16 +29,22 @@ class AppOcr {
 
   int get lineCount => text.isEmpty ? 0 : '\n'.allMatches(text).length + 1;
 
+  /// Reads a row back. An **empty** [text] is meaningful, not missing: it
+  /// records "OCR ran and found nothing", which is the normal answer for most
+  /// illustrations. Without that row the tagger would pay 2.5-7 s again on
+  /// every run to learn the same nothing.
   static AppOcr? fromRow(Map<String, Object?> row, {required int id}) {
-    final engine = row['engine'] as String?;
     final text = row['text'] as String?;
-    if (text == null || text.isEmpty) return null;
+    if (text == null) return null;  // NULL text = malformed row, not "no text"
     return AppOcr(
-      engine: engine ?? '',
+      engine: (row['engine'] as String?) ?? '',
       text: text,
       updated: (row['updated'] as int?) ?? 0,
     );
   }
+
+  /// Whether the OCR run produced anything worth indexing.
+  bool get hasText => text.isNotEmpty;
 
   Map<String, Object?> toRow(int id) => {
         'id': id,

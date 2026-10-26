@@ -142,8 +142,9 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
         // Vectors are stored even when no tag was published: a photo the tagger
         // had nothing to say about is still searchable by meaning.
         if (vectors.isNotEmpty) await appVectors.saveById(vectors);
-        // Same reasoning: a photo with text but no publishable tag is still
-        // findable by what it says.
+        // Rows are written even when the text is empty: an empty row means
+        // "already read, no text", and that is what stops the next tagging run
+        // from paying 2.5-7 s for the same photo again.
         if (ocrs.isNotEmpty) await appOcrs.saveById(ocrs);
       }
 

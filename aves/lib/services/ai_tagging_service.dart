@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:aves/model/app_ocr.dart';
+import 'package:aves/model/app_ocrs.dart';
 import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/entry/entry.dart';
 import 'package:aves/model/entry/extensions/images.dart';
@@ -312,9 +313,12 @@ class AiTaggingService {
         // Float32 so the phone can read it straight into a Float32List
         // instead of decoding half-floats by hand.
         'vector_dtype': 'float32',
-        // OCR costs seconds per photo, so it is its own flag: asking for it on
-        // every photo would make a tagging run ten times slower.
-        'include_ocr': true,
+        // OCR costs 2.5-7 s per photo, so it is only asked for on photos that
+        // have not been read yet. The first pass over a library is slow on
+        // purpose (it builds the text index); every later run is as fast as
+        // before, because a row -- even an empty one meaning "no text here" --
+        // is enough to skip.
+        'include_ocr': appOcrs.of(entry.id) == null,
       });
     }
     return (payload: payload, carried: carried, failures: failures);
@@ -400,7 +404,9 @@ class AiTaggingService {
         ),
         needsReview: raw['needs_review'] == true,
         vector: _parseVector(raw['semantic']),
-        ocr: _parseOcr(raw['ocr']),
+        // Presence of the key tells us OCR actually ran; a null value then
+        // means "read it, found nothing", which still deserves a row.
+        ocr: raw.containsKey('ocr') ? _parseOcr(raw['ocr']) : null,
       ));
     }
     return outcomes;
@@ -468,11 +474,17 @@ class AiTaggingService {
   }
 
   /// Same rule as the vector: a malformed OCR block must not cost the tags.
-  /// ``null`` is also the normal answer -- most illustrations have no text.
+  ///
+  /// A null [raw] is not a failure -- it means the service read the photo and
+  /// found no text. That is recorded as an empty [AppOcr], because "already
+  /// checked, nothing there" is exactly what keeps the next run fast.
   static AppOcr? _parseOcr(Object? raw) {
+    if (raw == null) {
+      return AppOcr(engine: '', text: '', updated: DateTime.now().millisecondsSinceEpoch);
+    }
     if (raw is! Map) return null;
     final text = raw['text'];
-    if (text is! String || text.isEmpty) return null;
+    if (text is! String) return null;
     return AppOcr(
       engine: '${raw['engine'] ?? ''}',
       text: text,
