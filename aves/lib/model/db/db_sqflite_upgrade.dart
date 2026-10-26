@@ -21,6 +21,7 @@ class LocalMediaDbUpgrader {
   static const debugTable = SqfliteLocalMediaDbSchema.debugTable;
   static const appTagTable = SqfliteLocalMediaDbSchema.appTagTable;
   static const appVectorTable = SqfliteLocalMediaDbSchema.appVectorTable;
+  static const appOcrTable = SqfliteLocalMediaDbSchema.appOcrTable;
 
   // warning: "ALTER TABLE ... RENAME COLUMN ..." is not supported
   // on SQLite <3.25.0, bundled on older Android devices
@@ -62,6 +63,8 @@ class LocalMediaDbUpgrader {
           await _upgradeFrom16(db);
         case 17:
           await _upgradeFrom17(db);
+        case 18:
+          await _upgradeFrom18(db);
       }
       oldVersion++;
     }
@@ -613,6 +616,22 @@ class LocalMediaDbUpgrader {
       ', model TEXT'
       ', dim INTEGER'
       ', vector TEXT'
+      ', updated INTEGER'
+      ')',
+    );
+  }
+
+  static Future<void> _upgradeFrom18(Database db) async {
+    debugPrint('upgrading DB from v18');
+
+    // text read off the photo by OCR, derived like the tags and the vector.
+    // `engine` travels with the row so a swap can be detected instead of
+    // silently mixing two engines' output in one index.
+    await db.execute(
+      'CREATE TABLE $appOcrTable('
+      'id INTEGER PRIMARY KEY'
+      ', engine TEXT'
+      ', text TEXT'
       ', updated INTEGER'
       ')',
     );

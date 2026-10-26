@@ -158,3 +158,37 @@ albumcat/
 ---
 
 [← 回到 README](../README.md)
+
+---
+
+## 新增 Dart 文件时，记得加进 CI 清单
+
+`.github/workflows/flutter.yml` 里的 `dart analyze` 只分析**明确列出的文件**，
+不是整个 `lib/`。这么设计是为了不跑上游那几百个文件的告警。
+
+代价是：**新文件不进清单，就永远不会被检查**。PR #1 正是这样漏掉三处编译错误的
+—— `dart analyze` 一分钟就能抓到，但那些文件不在清单里。
+
+所以新增 Dart 文件时，同步改这个清单。改动 `.github/workflows/*` 需要推送账号有
+`workflow` scope —— 用 HTTPS + OAuth token 推会被拒（
+
+    refusing to allow an OAuth App to create or update workflow ... without workflow scope
+
+）。两个办法：给 token 补 scope（`gh auth refresh -s workflow`），或者直接用 SSH 推
+—— SSH key 没有 scope 概念，一次就能过。
+
+**另外一个坑：这个 workflow 是手动触发的。**
+
+```yaml
+on:
+  workflow_dispatch:
+```
+
+理由是 `flutter pub get` + `analyze` 要几分钟和几百 MB，不值得每个 push 都跑。
+
+后果是：**PR 上的 CI 绿了，只代表 Python 测试过了，Dart 侧一行都没检查。**
+改过 `aves/` 的分支，合并前要去 Actions → flutter → Run workflow 手动跑一次。
+
+这解释了一个现象：PR #1 的检查全绿，但仍然带着三处编译错误。不是 CI 没发现，
+是 CI 根本没跑。
+

@@ -104,5 +104,9 @@ class TestSave:
 
         dest = Config().save(tmp_path / "out.toml")
         raw = tomllib.loads(dest.read_text(encoding="utf-8"))
-        assert set(raw) == {"model", "publish", "plugins", "semantic"}
+        assert set(raw) == {"model", "publish", "plugins", "semantic", "ocr"}
         assert raw["publish"]["character_root"] == "角色"
+        # OCR is its own section: the engine ships inside its package, so there
+        # is no model path to configure, only behaviour.
+        assert raw["ocr"]["max_side"] == 1600
+        assert raw["ocr"]["min_score"] == pytest.approx(0.5)

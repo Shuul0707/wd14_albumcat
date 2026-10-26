@@ -179,11 +179,42 @@ class SemanticConfig:
 
 
 @dataclass
+class OcrConfig:
+    """RapidOCR, used to read the text printed on a photo.
+
+    The engine is loaded at startup, but **whether a photo pays for OCR is
+    decided per request** (``include_ocr``), because it is by far the most
+    expensive thing this service does: measured 2.5-5.5 s per image on CPU,
+    against 0.1-0.6 s for WD14 tagging.
+
+    The model itself ships inside ``rapidocr_onnxruntime`` -- no download, no
+    separate model directory, which is why there is no ``dir`` field here.
+    """
+
+    enabled: bool = True
+    """Turn the engine off entirely; ``/ocr`` then reports available = false."""
+
+    max_side: int = 1600
+    """Longest edge fed to the detector. ``0`` disables the cap.
+
+    The detector walks the whole image, so a 4K poster costs roughly four times
+    a 1600px one while the text is still readable at either size."""
+
+    min_score: float = 0.5
+    """Drop recognised fragments below this confidence.
+
+    Anime lettering is stylised and OCR happily invents a character or two.
+    A wrong word in the index means the phone shows a photo the user never
+    asked for, which is worse than showing none."""
+
+
+@dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     publish: PublishConfig = field(default_factory=PublishConfig)
     plugins: PluginConfig = field(default_factory=PluginConfig)
     semantic: SemanticConfig = field(default_factory=SemanticConfig)
+    ocr: OcrConfig = field(default_factory=OcrConfig)
     root: Path = PROJECT_ROOT
 
     # ------------------------------------------------------------------ #
@@ -210,6 +241,7 @@ class Config:
             publish=_fill(PublishConfig, raw.get("publish")),
             plugins=_fill(PluginConfig, raw.get("plugins")),
             semantic=_fill(SemanticConfig, raw.get("semantic")),
+            ocr=_fill(OcrConfig, raw.get("ocr")),
         )
         if resolved is not None:
             cfg.root = resolved.parent
@@ -219,7 +251,7 @@ class Config:
     def apply_env(self, env: dict[str, str] | None = None) -> "Config":
         """Overlay ``ALBUMCAT_<SECTION>_<FIELD>`` environment variables."""
         env = os.environ if env is None else env
-        for section_name in ("model", "publish", "plugins", "semantic"):
+        for section_name in ("model", "publish", "plugins", "semantic", "ocr"):
             section = getattr(self, section_name)
             for f in fields(section):
                 key = f"ALBUMCAT_{section_name.upper()}_{f.name.upper()}"
@@ -230,7 +262,7 @@ class Config:
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
-        for section_name in ("model", "publish", "plugins", "semantic"):
+        for section_name in ("model", "publish", "plugins", "semantic", "ocr"):
             out[section_name] = asdict(getattr(self, section_name))
         return out
 

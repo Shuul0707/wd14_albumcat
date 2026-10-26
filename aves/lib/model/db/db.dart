@@ -1,3 +1,4 @@
+import 'package:aves/model/app_ocr.dart';
 import 'package:aves/model/app_vector.dart';
 import 'package:aves/model/covers.dart';
 import 'package:aves/model/dynamic_albums.dart';
@@ -126,6 +127,26 @@ abstract class LocalMediaDb {
   Future<void> saveAppVectors(Map<int, AppVector> rows);
 
   Future<void> removeAppVectors(Set<int> ids);
+
+  //
+  // text read off the photo by OCR, derived like the tags and kept out of the
+  // media files. One row per entry; `engine` says which engine produced it.
+
+  Future<void> clearAppOcr();
+
+  Future<Map<int, AppOcr>> loadAppOcr();
+
+  Future<void> saveAppOcr(Map<int, AppOcr> rows);
+
+  Future<void> removeAppOcr(Set<int> ids);
+
+  /// Photos whose OCR text contains [query], best match first.
+  ///
+  /// A plain `LIKE '%…%'`, which cannot use an index -- deliberately: the
+  /// column is a few hundred bytes, the row count equals the number of photos,
+  /// and an FTS table would be another schema to migrate and another tokenizer
+  /// to keep in sync with the phone's own language handling.
+  Future<List<AppOcrHit>> searchAppOcr(String query, {int limit = 200});
 
   // covers
 

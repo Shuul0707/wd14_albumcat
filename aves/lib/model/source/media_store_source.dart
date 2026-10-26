@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:aves/model/app_ocrs.dart';
 import 'package:aves/model/app_tags.dart';
 import 'package:aves/model/app_vectors.dart';
 import 'package:aves/model/covers.dart';
@@ -67,6 +68,10 @@ class MediaStoreSource extends CollectionSource {
     await appTags.init();
     appTags.addListener(onAppTagsChanged);
     await appVectors.init();
+    // Text index, same lifecycle as the tags and the vectors: loaded once
+    // at startup so the search box can tell whether to offer the text route
+    // without hitting the database on every keystroke.
+    await appOcrs.init();
     albumGrouping.init();
     albumGrouping.setGroups(settings.albumGroups);
     albumGrouping.registerSource(this);

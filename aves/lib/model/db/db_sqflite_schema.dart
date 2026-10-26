@@ -19,6 +19,10 @@ class SqfliteLocalMediaDbSchema {
   // Chinese-CLIP embeddings, derived the same way and kept out of the files
   // for the same reason: 512 float32 per photo is ~2 KB that no other app reads
   static const appVectorTable = 'appVectors';
+  // text read off the photo by OCR, derived and kept out of the files for the
+  // same reason as tags and vectors: no other app reads it, and a stray write
+  // would touch the bytes of a photo we promised not to modify
+  static const appOcrTable = 'appOcr';
 
   static const allTables = [
     entryTable,
@@ -34,6 +38,7 @@ class SqfliteLocalMediaDbSchema {
     debugTable,
     appTagTable,
     appVectorTable,
+    appOcrTable,
   ];
 
   static Future<void> createLatestVersion(Database db) async {
@@ -166,6 +171,18 @@ class SqfliteLocalMediaDbSchema {
           ', dim INTEGER'
           // base64 of little-endian float32
           ', vector TEXT'
+          ', updated INTEGER'
+          ')',
+        );
+      case appOcrTable:
+        return db.execute(
+          'CREATE TABLE $appOcrTable('
+          'id INTEGER PRIMARY KEY'
+          // which engine produced it: two engines disagree on stylised
+          // lettering, so rows from a different engine are not comparable
+          ', engine TEXT'
+          // newline-joined lines in reading order; substring-searched
+          ', text TEXT'
           ', updated INTEGER'
           ')',
         );
