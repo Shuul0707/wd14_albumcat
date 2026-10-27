@@ -16,7 +16,7 @@ tools\aves_build.ps1 -Platform android-x64                              # 只给
 JDK 21 + Flutter 3.47.6，首次 `flutter build` 会自己生成 `android/gradlew` 与
 wrapper，这两个文件用不着入库。
 
-产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（通用包 **380,983,207 B**；
+产物是 `aves/build/app/outputs/flutter-apk/app-libre-debug.apk`（通用包 **380,986,074 B**；
 debug 包之所以这么大，是 media-kit 的 AAR 把三套 ABI 的 libmpv 都带进来了，加上
 `com.microsoft.onnxruntime:onnxruntime-android` 又把 `libonnxruntime.so` 塞进了三个 ABI ——
 合并语义搜索前是 198 MB，多出来的约 75 MB 就是 onnxruntime；三套 Flutter 引擎各 33–40 MB

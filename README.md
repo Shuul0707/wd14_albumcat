@@ -9,7 +9,7 @@
 ![app](https://img.shields.io/badge/相册-Aves%20fork-1f6feb)
 [![release](https://img.shields.io/github/v/release/Shuul0707/wd14_albumcat?label=release)](https://github.com/Shuul0707/wd14_albumcat/releases)
 
-> 手机端 APK 在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)：一个包内含 arm64-v8a / armeabi-v7a / x86_64 三套 Flutter 引擎，真机和模拟器都能装（装过 v0.3.0/v0.4.0 的话请换 v0.4.1，前两个包在 arm64 真机上会一打开就退出）。
+> 手机端 APK 在 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases)：一个包内含 arm64-v8a / armeabi-v7a / x86_64 三套 Flutter 引擎，真机和模拟器都能装（装过 v0.3.0/v0.4.0 的话请换新版，那两个包在 arm64 真机上会一打开就退出；v0.5.0 的包只在 arm64 里带引擎）。
 > 电脑端按下面[快速开始](#快速开始)跑起来，两边连同一个 Wi-Fi 就能开始打标签。
 
 手机里攒了几千张同人图和截图，想按角色翻，系统相册却只能按时间。albumcat 把
@@ -106,7 +106,7 @@ tools\albumcat.cmd plan samples\
 
 ### 2. 手机端
 
-1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.4.1 或更新**），
+1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.5.1 或更新**），
    或者按 [aves/FORK.md](aves/FORK.md) 自己构建；装好授权照片访问；
 2. 右上角 ✨ → **AI 打标签** → 填电脑地址 `http://192.168.1.10:8899` → **开始打标签**；
 3. 打完到 **Tags** 页，`角色|…` 会出现在那里。
