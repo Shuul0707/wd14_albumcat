@@ -172,6 +172,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(r"     build them once with: python tools\export_chinese_clip_onnx.py")
             print("     (tagging is unaffected -- GET /semantic reports available: false)")
 
+    print("\nocr (optional)")
+    if not cfg.ocr.enabled:
+        print("  disabled in config ([ocr] enabled = false)")
+    else:
+        from .ocr import OcrEngine
+
+        info = OcrEngine(cfg.ocr).info()
+        if info.available:
+            cap = f"{info.max_side} px" if info.max_side else "uncapped"
+            print(f"  -> {info.engine}, longest edge {cap}, drop below score {info.min_score}")
+            print("     costs ~2 s per photo and only runs when a request sets include_ocr")
+        else:
+            print(f"  [--]   not available: {info.reason}")
+            print('     install it with:  pip install -e ".[ocr]"   (Windows: tools\\install_deps.cmd)')
+            print("     (tagging and search are unaffected -- GET /ocr reports available: false)")
+
     print("\nphone")
     from .firewall import preflight
     from .server import _lan_ips

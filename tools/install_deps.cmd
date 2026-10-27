@@ -6,7 +6,7 @@ REM   * the DSH sandbox redirects TEMP at a path the venv bootstrap cannot use,
 REM     so we pin TEMP/TMP inside the project;
 REM   * a direct PyPI connection stalls, so we install from a Chinese mirror.
 REM
-REM Usage:  tools\install_deps.cmd [--cpu|--gpu]
+REM Usage:  tools\install_deps.cmd [--cpu] [--no-ocr]
 
 setlocal
 cd /d "%~dp0.."
@@ -35,7 +35,18 @@ if /i "%~1"=="--cpu" set "ORT=onnxruntime"
 "%PY%" -m pip install --cache-dir "%~dp0..\.pipcache" --index-url "%INDEX%" ^
     "%ORT%" opencv-python-headless pandas pillow numpy requests || exit /b 1
 
+REM OCR (reading the text printed on a photo, see docs/OCR.md) is optional but
+REM the app asks for it on every new photo, so install it by default; pass
+REM --no-ocr to skip. --no-deps is deliberate: rapidocr declares opencv-python,
+REM and pulling that would overwrite the headless cv2 installed above (and fail
+REM while `serve` holds cv2.pyd open). Everything it imports is already here.
+if /i not "%~1"=="--no-ocr" (
+    "%PY%" -m pip install --no-deps --cache-dir "%~dp0..\.pipcache" --index-url "%INDEX%" ^
+        rapidocr-onnxruntime || exit /b 1
+)
+
 "%PY%" -c "import onnxruntime as o, cv2, pandas, PIL, numpy, requests; print('ORT', o.__version__); print('providers', o.get_available_providers()); print('cv2', cv2.__version__); print('numpy', numpy.__version__)" || exit /b 1
+"%PY%" -c "import rapidocr_onnxruntime; print('OCR engine ok')" 2>nul || echo OCR engine missing -- run: .venv\Scripts\pip install --no-deps rapidocr-onnxruntime
 
 echo.
 echo deps OK

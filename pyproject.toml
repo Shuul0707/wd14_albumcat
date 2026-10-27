@@ -37,6 +37,12 @@ dependencies = [
 dml = ["onnxruntime-directml>=1.20"]
 cuda = ["onnxruntime-gpu>=1.20"]
 cpu = ["onnxruntime>=1.20"]
+# Reading the text printed on a photo (docs/OCR.md). Optional because it costs
+# ~2 s per image and ships its own 12 MB of ONNX models; `/plan` only runs it
+# when a request sets `include_ocr`. It declares `opencv-python`, which lands on
+# top of the `opencv-python-headless` above -- same `cv2` module, so the install
+# is harmless, only the on-disk files change hands.
+ocr = ["rapidocr-onnxruntime>=1.2"]
 dev = ["pytest>=8"]
 
 [project.scripts]

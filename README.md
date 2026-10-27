@@ -87,13 +87,13 @@ fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都�
 
 ```bat
 python tools\download_model.py     REM 下模型（356 MB）到 models\vit\，默认走 hf-mirror
-tools\install_deps.cmd             REM 建 .venv 并装依赖；默认 onnxruntime-directml，加 --cpu 强制 CPU
+tools\install_deps.cmd             REM 建 .venv 并装依赖（含 OCR）；默认 onnxruntime-directml，加 --cpu 强制 CPU、--no-ocr 不要 OCR
 tools\albumcat.cmd doctor          REM 自检：模型、依赖、推理后端、插件
 tools\albumcat.cmd serve           REM 起手机要连的 HTTP 服务，默认 0.0.0.0:8899
 ```
 
 就这样跑最简单。想把它当包用（终端里直接 `albumcat`、能跑 `pytest`）：
-`pip install -e ".[dml,dev]"`，环境细节见 [参与开发](CONTRIBUTING.md)。
+`pip install -e ".[dml,dev,ocr]"`（`ocr` 那项就是读图上文字的引擎，见 [OCR](docs/OCR.md)），环境细节见 [参与开发](CONTRIBUTING.md)。
 
 先不碰手机，用本地图看效果：
 
@@ -188,7 +188,7 @@ plugins/             插件目录（示例 + 训练产物）
 tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）
 docs/                延伸阅读与 UI 证据截图
 config.toml          全部配置项，注释齐全
-pyproject.toml       能 `pip install -e ".[dml,dev]"`，也带着 pytest 的配置
+pyproject.toml       能 `pip install -e ".[dml,dev]"`（要多带 `,ocr` 才有识字引擎），也带着 pytest 的配置
 .github/workflows/   CI：pytest + 仓库卫生（Flutter 侧手动触发）
 ```
 

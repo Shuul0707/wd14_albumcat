@@ -13,8 +13,13 @@
 依赖 Umi-OCR 本体意味着：多一套 Python 环境、一个必须开窗口的 GUI、以及一个无法在无头服务器上跑的东西 —— 而 `/plan` 恰恰经常跑在没有屏幕的机器上。
 
 ```bash
-pip install rapidocr-onnxruntime
+pip install -e ".[ocr]"         # 或者 Windows 上直接跑 tools\install_deps.cmd（默认就装）
 ```
+
+`rapidocr-onnxruntime` 声明的依赖是 `opencv-python`，而本项目的基线装的是
+`opencv-python-headless`：同一个 `cv2` 模块，覆盖安装没有功能差别，只是别在 `serve`
+正跑着的时候装 —— Windows 会锁住 `cv2.pyd`，报 `[WinError 5] 拒绝访问`。真撞上了就
+`pip install --no-deps rapidocr-onnxruntime`（它 import 的东西基线依赖里都有）。
 
 模型**在包里**（约 15 MB），没有下载步骤、没有 `models/` 目录要管。这是它和 CLIP 最大的区别：CLIP 需要 `tools/export_chinese_clip_onnx.py` 先导出，OCR 装完就能用。
 
