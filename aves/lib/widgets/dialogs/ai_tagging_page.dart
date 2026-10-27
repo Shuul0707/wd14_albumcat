@@ -102,7 +102,7 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
     // and shipped so the server can throw the extra pixels away. The extent is
     // in DIP and the platform multiplies it back by the ratio, hence the division.
     final extentDip = max(1.0, 448 / MediaQuery.of(context).devicePixelRatio);
-    var tagged = 0, empty = 0, failed = 0;
+    var tagged = 0, empty = 0, failed = 0, texted = 0;
     final stats = AiTaggingStats();
     try {
       // What the user typed first, then the USB tunnel: with the cable plugged
@@ -129,7 +129,10 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
           final vector = outcome.vector;
           if (vector != null) vectors[outcome.entryId] = vector;
           final ocr = outcome.ocr;
-          if (ocr != null) ocrs[outcome.entryId] = ocr;
+          if (ocr != null) {
+            ocrs[outcome.entryId] = ocr;
+            if (ocr.hasText) texted++;
+          }
           final selection = outcome.selectTags(includeGeneral: _includeGeneral);
           if (selection.isEmpty) {
             empty++;
@@ -163,14 +166,16 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
           if (mounted) setState(() => _done = done);
         },
       );
-      _say('完成：$tagged 张写了标签，$empty 张没认出来，$failed 张失败。');
+      // The OCR count answers "which photos have words printed on them" in one
+      // line; what each photo actually says is in its info page.
+      _say('完成：$tagged 张写了标签，$empty 张没认出来，$failed 张失败，$texted 张认出了文字。');
       _say(stats.describe());
       debugPrint('albumcat-stats: ${stats.describe()}');
       if (_stopRequested) _say('（中途停止，已经保存的标签都留着了）');
     } catch (error) {
       _say('出错：${AiTaggingService.describeError(error)}');
       if (tagged > 0 || failed > 0) {
-        _say('已经存下来的：$tagged 张写了标签，$empty 张没认出来，$failed 张失败。');
+        _say('已经存下来的：$tagged 张写了标签，$empty 张没认出来，$failed 张失败，$texted 张认出了文字。');
       }
     } finally {
       if (mounted) setState(() => _running = false);

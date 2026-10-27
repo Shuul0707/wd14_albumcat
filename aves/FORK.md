@@ -18,7 +18,7 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`appTags
 
 ## 相对上游改了什么
 
-新增（12 个文件）：
+新增（15 个文件）：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -33,14 +33,17 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`appTags
 | `lib/services/on_device_text_encoder.dart` | 端侧文本塔的 Dart 侧：私有目录检查、`.part` 下载后改名、加载与编码 |
 | `lib/services/hybrid_ranking.dart` | 纯 Dart 的融合打分（角色 band + 标签 + 向量）与「听懂了什么」的文案，11 个单测钉住 |
 | `lib/widgets/search/semantic_search_banner.dart` | 语义排序结果页 app bar 底部那一条说明横幅 |
+| `lib/model/app_ocr.dart` | 一张图的文字（引擎名 / 换行连接的整段文字 / 时间）；空文字是「扫过但没字」，不是缺数据 |
+| `lib/model/app_ocrs.dart` | `appOcr` 表的内存模型；只用来回答「库里有没有文字可搜」，真正的查询每次都下 SQLite |
+| `lib/widgets/viewer/info/ocr_section.dart` | 信息页的「图上文字」段：可选中复制的正文 + `rapidocr · 2 行 · 时间` 落款 |
 | `android/.../channel/calls/TextEncoderHandler.kt` | 端侧 Chinese-CLIP 文本塔：onnxruntime-android 加载、自实现 BERT WordPiece、原生侧 L2 归一化 |
 
 数据库与标签模型：
 
 - `lib/model/db/db_sqflite_schema.dart`、`db_sqflite.dart`、`db_sqflite_upgrade.dart`、`db.dart`
-  —— schema 升到 **v18**，多两张表：`appTags`（条目 id → `;` 分隔的标签串）与
-  `appVectors`（条目 id → 图像塔 id / 维度 / base64 float32 向量），各带增删查接口
-  与迁移（16→17、17→18）。向量和标签一样只住在数据库里，照片文件一个字节都不改。
+  —— schema 升到 **v19**，多三张表：`appTags`（条目 id → `;` 分隔的标签串）、
+  `appVectors`（条目 id → 图像塔 id / 维度 / base64 float32 向量）、`appOcr`（条目 id → 引擎名 /
+  整段文字 / 时间），各带增删查接口与迁移（16→17、17→18、18→19）。这些都只住在数据库里，照片文件一个字节都不改。
 - `lib/model/entry/entry.dart` —— 条目显示的标签是「文件自带的标签 ∪ app 标签」的并集。
 - `lib/model/entry/extensions/metadata_edition.dart` —— **闸门**：界面上改标签时，只有本来就在
   文件里的标签会被写回文件（IPTC/XMP），纯 app 标签永远不落到照片上。
@@ -72,6 +75,15 @@ WD14 服务，拿回角色标签，**存进 Aves 自己的数据库**（`appTags
 - `lib/model/source/collection_lens.dart` —— `fixedSelection` 的列表在 `_applyFilters` 之后直接返回
   （不再按日期叠组）；`copyWith` 会把 `fixedSort` / `fixedSelection` / `semantic` 一起带走，
   所以 viewer（`CollectionGrid._goToViewer` 拿的是 lens 的拷贝）与网格同序。
+
+图上文字（OCR 那一半）：
+
+- `lib/widgets/search/collection_search_delegate.dart` 的 `_ocrWorthy` / `_buildOcrRow` ——
+  建议列表再一行「搜图片上的文字「…」」，点了才走 SQLite `LIKE`；回车仍归原生查询。
+- `lib/widgets/viewer/info/ocr_section.dart` 挂在 `lib/widgets/viewer/info/info_page.dart` 上 ——
+  打开照片 → Info 就能看到这张图的文字，引擎名 / 行数 / 时间在下面一行。
+- `lib/widgets/dialogs/ai_tagging_page.dart` —— 收尾统计多一句「N 张认出了文字」，
+  空文字的行也会写库（否则下次打标又要为同一张图付一遍 OCR 的钱）。
 
 ## 怎么构建
 

@@ -38,17 +38,24 @@ jobs:
             lib/model/app_ocr.dart \
             lib/model/app_ocrs.dart \
             lib/services/ai_tagging_service.dart \
+            lib/services/hybrid_ranking.dart \
             lib/services/semantic_search_service.dart \
             lib/services/on_device_text_encoder.dart \
             lib/services/android_debug_service.dart \
             lib/widgets/dialogs/ai_tagging_page.dart \
             lib/widgets/search/collection_search_delegate.dart \
+            lib/widgets/search/semantic_search_banner.dart \
+            lib/widgets/collection/app_bar.dart \
+            lib/widgets/collection/collection_page.dart \
+            lib/widgets/viewer/info/info_page.dart \
+            lib/widgets/viewer/info/ocr_section.dart \
             lib/model/settings/modules/ai_tagging.dart \
             lib/model/entry/extensions/metadata_edition.dart \
             lib/model/db/db_sqflite.dart \
             lib/model/db/db_sqflite_schema.dart \
             lib/model/db/db_sqflite_upgrade.dart \
             lib/model/source/media_store_source.dart \
+            lib/model/source/collection_lens.dart \
             lib/model/source/collection_source.dart
 
       - name: 上游自带的单元测试
