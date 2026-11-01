@@ -81,6 +81,21 @@ fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都�
 `1girl` 认成「女孩 / 单个女孩」，角色名连系列一起认（「东方的角色」= 东方 Project 全员）。
 融合打分的代码在 `aves/lib/services/hybrid_ranking.dart`，有 11 个单测钉住每一条规则。
 
+## 按图片类型筛
+
+两类人共用同一套标签，看的东西不一样：
+
+| 你想干的事 | 点哪里 |
+| --- | --- |
+| 找某个角色的插画、梗图、表情包 | `角色\|…` 里的角色名，或者直接搜「黑暗的初音未来」 |
+| 只整理收藏的插画，不想混进梗图/表情包/截图 | `插画` |
+
+`插画`、`梗图`、`照片`、`截图` 这四个互斥标签来自一个小分类头：WD14 抽出的 768 维特征送进
+4 类 softmax（12 KB，在 `plugins/illustration/`），一张图只会拿到一个；冠军置信度不到 0.5 就
+**一个都不给**——宁可留空，也不把真实照片塞进「插画」。它跟 WD14 的标签一起在 `/plan` 里返回，
+手机端不需要任何改动（现有 v0.5.1 就认）。数据来源、训练命令、域外误判（cosplay／手办／油画照片）
+见 [图片类型分类](docs/CLASSIFIER.md)。
+
 ## 快速开始
 
 ### 1. 电脑端
@@ -184,7 +199,7 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / Chinese-CLIP / HTTP 服务 / 命令行
 aves/                手机端：Aves 的 fork 源码（标签与语义向量存进它自己的 appTags / appVectors 表）
 tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
-plugins/             插件目录（示例 + 训练产物）
+plugins/             插件目录（`illustration/` 就是已训好的插画分类头，其余是示例）
 tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）
 docs/                延伸阅读与 UI 证据截图
 config.toml          全部配置项，注释齐全
@@ -203,6 +218,7 @@ pyproject.toml       能 `pip install -e ".[dml,dev]"`（要多带 `,ocr` 才有
 | [手机端](docs/PHONE.md) | App 用法、连接排错、数据线备用通道、中断保护、真机烟测 |
 | [安装与用法](docs/USAGE.md) | 装依赖、下模型、配置、自检、标签格式 |
 | [插件](docs/PLUGINS.md) | 在 WD14 之后接自己的模型，训练一个角色插件 |
+| [图片类型分类](docs/CLASSIFIER.md) | 插画／梗图／照片／截图四类互斥头：数据、训练、指标、误判 |
 | [语义搜索](docs/SEMANTIC.md) | Chinese-CLIP 向量 + 中文标签对照表 + 混合检索（「黑暗的初音未来」怎么排） |
 | [图片文字识别](docs/OCR.md) | OCR 把图上的字变成可搜索索引：按张开启、实测耗时、手机端怎么搜、在哪看一张图的文字 |
 | [开发与验证](docs/DEVELOPMENT.md) | 验证脚本、目录树 |

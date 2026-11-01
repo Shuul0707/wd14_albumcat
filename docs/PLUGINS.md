@@ -60,6 +60,31 @@ tools\albumcat.cmd train --data data --out plugins\my-ip --id my-ip --name "我�
 tools\albumcat.cmd plugins
 ```
 
+### 互斥多分类头（`--loss ce`）
+
+上面那套是**多标签**：一张图可以同时是「初音未来」和「巡音ルカ」。有些问题反过来——
+一张图**只可能是其中一类**，比如「插画 / 梗图 / 照片 / 截图」。这时用 softmax 交叉熵：
+
+```bat
+:: data\kindset\插画\*.jpg  data\kindset\梗图\*.jpg  data\kindset\照片\*.jpg
+:: 每个子目录恰好一个类别，不再有 background 目录
+.venv\Scripts\python.exe tools\train_feature_plugin.py ^
+  --data data\kindset --out plugins\illustration --id illustration ^
+  --name "插画分类" --target tag --threshold 0.5 ^
+  --loss ce --class-weight ^
+  --cache data\kindset\embeddings.npz --binary-label 插画
+```
+
+- `--loss ce` 要求每张图**恰好一个**标签（有 background 目录会直接报错退出，因为「无标签」在互斥问题里没有定义）。
+- `--class-weight` 按逆频率给稀有类加权，否则「截图」这种小类会被完全忽略。
+- `--cache out.npz` 把 768 维特征缓存下来：调 `--epochs/--lr/--l2` 重训只要几秒，不再重新过模型。
+  缓存带指纹（路径 + 大小 + mtime + 头尾各 8 KB 的哈希），图片换了会自动重算。
+- `--binary-label 插画` 额外打印「插画 vs 其余」的二分类指标（precision / recall / AUC），
+  以及 softmax 冠军判定下的混淆矩阵——你要的「是不是插画」就是这个数。
+- 导出的 `plugin.json` 会多两行 `"exclusive": true`、`"activation": "softmax"`。
+  `exclusive` 让服务端只取**冠军类**，而且冠军置信度低于 `threshold` 时**一个标签都不发**——
+  拿不准的照片宁可留空，也不要往「插画」里塞一张真实照片。
+
 > **不需要上游的拆分模型。** 上游 README 让你用 `split_model.py` 切出
 > 1.2 GB 的 `feature_extractor.onnx` + 43 MB 的 `classifier.onnx`；本项目改用
 > `tools\add_feature_output.py` 把特征张量声明成原模型的**额外输出**，

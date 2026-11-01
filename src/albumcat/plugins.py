@@ -217,6 +217,7 @@ class _Base:
     def __init__(self, manifest: PluginManifest, context: RecognizerContext) -> None:
         self.manifest = manifest
         self.context = context
+        self.exclusive = bool(manifest.extra.get("exclusive"))
         self._loaded = False
         self._reason = ""
 
@@ -242,14 +243,17 @@ class _Base:
     # -- helpers ------------------------------------------------------- #
     def _predictions(self, keys: Sequence[str], scores: Sequence[float]) -> list[Prediction]:
         threshold = self.manifest.threshold
-        out: list[Prediction] = []
-        for key, score in zip(keys, scores):
-            score = float(score)
-            if score >= threshold:
-                out.append(
-                    Prediction(key, score, self.manifest.target, self.manifest.id)
-                )
-        return out
+        pairs = [(str(key), float(score)) for key, score in zip(keys, scores)]
+        # A softmax head answers "which one", not "how many": keep the winner
+        # only, and keep nothing when even the winner is unsure. A trainer that
+        # exported a softmax writes ``"exclusive": true`` into plugin.json.
+        if self.exclusive and pairs:
+            pairs = [max(pairs, key=lambda pair: pair[1])]
+        return [
+            Prediction(key, score, self.manifest.target, self.manifest.id)
+            for key, score in pairs
+            if score >= threshold
+        ]
 
 
 # --------------------------------------------------------------------------- #

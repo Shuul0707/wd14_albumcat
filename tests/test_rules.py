@@ -116,6 +116,23 @@ class TestGeneralTags:
         plan = plan_for([Prediction("twintails", 0.9)], PublishConfig(max_general_tags_per_image=0))
         assert plan.tags == []
 
+    def test_a_plugin_tag_is_not_crowded_out_by_the_cap(self) -> None:
+        # Both WD14 tags outscore the plugin's, and the cap is 1: without the
+        # exemption the classifier the user installed would never publish.
+        predictions = [
+            Prediction("smile", 0.99),
+            Prediction("twintails", 0.98),
+            Prediction("插画", 0.4, GENERAL, source="illustration"),
+        ]
+        plan = plan_for(predictions, PublishConfig(max_general_tags_per_image=1))
+        assert [tag.path for tag in plan.tags] == [("插画",), ("Smile",)]
+        assert plan.tags[0].source == "illustration"
+
+    def test_a_plugin_tag_still_respects_the_denylist(self) -> None:
+        predictions = [Prediction("插画", 0.9, GENERAL, source="illustration")]
+        plan = plan_for(predictions, PublishConfig(general_tag_denylist=["插画"]))
+        assert plan.tags == []
+
 
 class TestUserRules:
     def test_drop_suppresses_the_character(self) -> None:

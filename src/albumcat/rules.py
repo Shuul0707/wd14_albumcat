@@ -225,8 +225,22 @@ class RuleEngine:
         # ---- 4. general tags ----------------------------------------- #
         if cfg.max_general_tags_per_image > 0:
             deny = {t.lower() for t in cfg.general_tag_denylist}
+            general = tagset.general
+            # A plugin the user installed on purpose gets its say whatever the
+            # cap: on a busy image 25 WD14 tags can fill the list, and a
+            # classifier whose whole job is "is this an illustration" must not
+            # be the tag that falls off the end.
+            for pred in general:
+                if pred.source == "wd14":
+                    continue
+                if pred.ref in dropped or pred.key.lower() in deny:
+                    continue
+                emit((prettify(pred.key),), pred, pred.score, f"plugin {pred.source}",
+                     pred.source)
             kept = 0
-            for pred in tagset.general:
+            for pred in general:
+                if pred.source != "wd14":
+                    continue
                 if kept >= cfg.max_general_tags_per_image:
                     break
                 if pred.ref in dropped or pred.key.lower() in deny:
