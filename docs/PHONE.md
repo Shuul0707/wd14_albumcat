@@ -162,6 +162,31 @@ REM 端口不是 8899 时：tools\allow_firewall.cmd 9000
 `netsh` 的输出语言**会随有没有控制台而变**（同一条查询在 shell 里回英文、在代码里回中文），
 所以 `src\albumcat\firewall.py` 是按中英双语解析的。
 
+### 打标打到一半电脑端就没了？是 CLIP × DirectML 的老坑
+
+症状：`测试连接` 偶尔通过，一开始打标就失败，多试几次连 `测试连接` 也过不去了。这时看
+电脑端——`serve` 进程已经不在了（终端里的窗口自己关了，或者 `Get-Process python` 空了），
+`serve` 的输出里最后一句往往是 `ConnectionResetError`。事件查看器 → Windows 日志 → 应用
+程序里能看到 `python.exe` 的「应用程序错误」：故障模块
+`onnxruntime_pybind11_state.pyd`、异常代码 `0xc0000005`。
+
+原因（最新代码已修）：Chinese-CLIP 的两个塔（`image_encoder.onnx`、`text_encoder.onnx`）
+分不到 DirectML 上，`InferenceSession` 抛 `E_INVALIDARG` 之后 onnxruntime 会自己退回 CPU；
+但那次失败的初始化会把进程里的 DML 提供程序留在半死状态，**之后同一进程里任何一个
+DirectML 会话再跑就访问冲突，整个 `serve` 瞬间消失**——插件的小分类头正好是后建的那个。
+
+修法在 `src/albumcat/semantic.py` 的 `SemanticEncoder._providers()`：CLIP 不再交给 DML，
+一律 CPU（单张约 60 ms，够用），WD14 与插件头继续吃 DirectML。拉最新代码重启
+`serve` 就行，配置不用改。
+
+自查：启动日志里应该有一行
+`chinese-clip runs on CPU: directml cannot partition these towers (device=auto, ...)`，
+并且**不该**再出现 `EP Error ... Falling back to ['CPUExecutionProvider']`。
+
+顺带一提：一台机器上两张网卡落在同一个网段（这台就是以太网 10.150.84.47 与
+WLAN 10.150.113.217 同属 10.150.0.0/16）时，回包可能从另一张卡出去，表现是「有时通有时
+不通」。这种情况用 `tools\albumcat.cmd serve --host <手机连的那个 IP>` 绑死出口。
+
 ### Aves 那一端，在设备上也是验过的
 
 模拟器上装了 fork 的 APK，让它把相册索引完，用「AI 打标签」跑一轮，然后**直接把它的

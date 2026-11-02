@@ -174,6 +174,23 @@ def test_encoder_disabled_by_config():
     assert "disabled" in encoder.info().reason
 
 
+@pytest.mark.parametrize("device", ["auto", "dml", "cuda", "cpu", "nonsense"])
+def test_the_clip_towers_never_get_directml(device):
+    """A failed DML session poisons the process for later DirectML runs.
+
+    ``serve`` used to die with 0xC0000005 on the first tag request because the
+    CLIP towers were offered DirectML, failed to partition, and left the DML
+    provider half-initialised for the plugin head that ran after them.
+    """
+    pytest.importorskip("onnxruntime")
+    encoder = SemanticEncoder(SemanticConfig(enabled=True, device=device))
+
+    providers = encoder._providers()
+
+    assert "DmlExecutionProvider" not in providers
+    assert providers and providers[-1] == "CPUExecutionProvider"
+
+
 # --------------------------------------------------------------------------- #
 # response shape / cache safety
 

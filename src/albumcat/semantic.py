@@ -345,6 +345,12 @@ class SemanticEncoder:
 
         if not image_path.exists():
             raise FileNotFoundError(f"image tower not found: {image_path}")
+        if self.config.device in ("auto", "dml"):
+            log.info(
+                "chinese-clip runs on CPU: directml cannot partition these towers "
+                "(device=%s, see SemanticEncoder._providers)",
+                self.config.device,
+            )
         self._image_session = ort.InferenceSession(
             str(image_path), providers=self._providers()
         )
@@ -363,13 +369,27 @@ class SemanticEncoder:
             log.info("text tower missing (%s) - /encode_text will be unavailable", text_path)
 
     def _providers(self) -> list[str]:
+        """Execution providers for the two CLIP towers.
+
+        DirectML is deliberately *not* offered these sessions, on any
+        platform. Both towers (tagging-sized dynamic sequence length, 224x224
+        patch grids) fail to partition for DML: ``InferenceSession`` raises
+        ``E_INVALIDARG`` out of ``DmlExecutionProvider/.../MLOperatorAuthorImpl.cpp``
+        and onnxruntime then quietly retries on CPU. That failed retry leaves
+        the DML provider half-initialised, and the next DirectML ``run()`` in
+        the same process dies with an access violation
+        (``onnxruntime_pybind11_state.pyd+0x1fbc80``, 0xC0000005) -- which is
+        exactly what used to kill ``albumcat serve`` on the first tag request
+        whenever a plugin head also lived in the process. CLIP costs ~60 ms per
+        image on CPU anyway, so the fix is to never hand DML these towers.
+        """
         import onnxruntime as ort
 
         wanted = self.config.device
         available = set(ort.get_available_providers())
         order = {
-            "auto": ["DmlExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
-            "dml": ["DmlExecutionProvider", "CPUExecutionProvider"],
+            "auto": ["CUDAExecutionProvider", "CPUExecutionProvider"],
+            "dml": ["CUDAExecutionProvider", "CPUExecutionProvider"],
             "cuda": ["CUDAExecutionProvider", "CPUExecutionProvider"],
             "cpu": ["CPUExecutionProvider"],
         }.get(wanted, ["CPUExecutionProvider"])
