@@ -207,6 +207,11 @@ class SettingKeys {
   static const aiTaggingMinScoreKey = 'ai_tagging_min_score';
   static const aiTaggingIncludeGeneralKey = 'ai_tagging_include_general';
 
+  // Reading the text printed on a photo is the single most expensive thing the
+  // tagger does (measured ~0.9 s/photo against ~0.15 s for everything else), so
+  // it stays off until asked for.
+  static const aiTaggingReadTextKey = 'ai_tagging_read_text';
+
   // platform settings
   // cf Android `Settings.System.ACCELEROMETER_ROTATION`
   static const platformAccelerometerRotationKey = 'accelerometer_rotation';

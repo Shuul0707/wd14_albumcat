@@ -34,4 +34,14 @@ mixin AiTaggingSettings on SettingsAccess {
   bool get aiTaggingIncludeGeneral => getBool(SettingKeys.aiTaggingIncludeGeneralKey) ?? false;
 
   set aiTaggingIncludeGeneral(bool newValue) => set(SettingKeys.aiTaggingIncludeGeneralKey, newValue);
+
+  /// also read the text printed on each photo (OCR)
+  ///
+  /// Off by default: it costs around a second per photo -- several times the
+  /// tagging itself -- and most photos have no text at all. Photos already read
+  /// keep their `appOcr` row (even an empty one), so turning this on later only
+  /// pays for the ones still missing.
+  bool get aiTaggingReadText => getBool(SettingKeys.aiTaggingReadTextKey) ?? false;
+
+  set aiTaggingReadText(bool newValue) => set(SettingKeys.aiTaggingReadTextKey, newValue);
 }

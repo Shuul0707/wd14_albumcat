@@ -187,6 +187,7 @@ class AiTaggingService {
     int batchSize = 8,
     int concurrency = 4,
     double extentDip = 224,
+    bool readText = false,
     AiTaggingStats? stats,
     bool Function()? isCancelled,
     void Function(int done, int total)? onProgress,
@@ -210,12 +211,12 @@ class AiTaggingService {
     // Fetching a thumbnail dwarfs everything else, so the next slice is decoded
     // while the current one is being tagged: the phone and the computer end up
     // working at the same time instead of taking turns.
-    var pending = _fetchSlice(slices.first, extentDip, workers, stats);
+    var pending = _fetchSlice(slices.first, extentDip, workers, stats, readText);
     for (var i = 0; i < slices.length; i++) {
       final fetched = await pending;
       final next = i + 1;
       if (next < slices.length) {
-        pending = _fetchSlice(slices[next], extentDip, workers, stats);
+        pending = _fetchSlice(slices[next], extentDip, workers, stats, readText);
       }
       if (isCancelled?.call() ?? false) break;
       final (sliceOutcomes, reached) = fetched.payload.isEmpty
@@ -287,11 +288,17 @@ class AiTaggingService {
         List<Map<String, Object?>> payload,
         Map<int, AvesEntry> carried,
         List<AiTaggingOutcome> failures,
-      })> _fetchSlice(List<AvesEntry> slice, double extentDip, int workers, AiTaggingStats? stats) async {
+      })> _fetchSlice(
+    List<AvesEntry> slice,
+    double extentDip,
+    int workers,
+    AiTaggingStats? stats,
+    bool readText,
+  ) async {
     // A photo that still needs OCR is fetched larger than tagging wants:
     // watermarks and credits vanish below ~1280px, and a batch usually holds
     // at most a few such photos (already-indexed ones skip it entirely).
-    final anyNeedsOcr = slice.any((e) => appOcrs.of(e.id) == null);
+    final anyNeedsOcr = readText && slice.any((e) => appOcrs.of(e.id) == null);
     final fetchExtent = anyNeedsOcr ? math.max(extentDip, ocrExtentDip) : extentDip;
     final thumbs = await _mapOrdered(slice, workers, (entry) => _thumbnailBytes(entry, fetchExtent, stats));
     final payload = <Map<String, Object?>>[];
@@ -319,12 +326,12 @@ class AiTaggingService {
         // Float32 so the phone can read it straight into a Float32List
         // instead of decoding half-floats by hand.
         'vector_dtype': 'float32',
-        // OCR costs 2.5-7 s per photo, so it is only asked for on photos that
-        // have not been read yet. The first pass over a library is slow on
-        // purpose (it builds the text index); every later run is as fast as
-        // before, because a row -- even an empty one meaning "no text here" --
-        // is enough to skip.
-        'include_ocr': appOcrs.of(entry.id) == null,
+        // `include_ocr` is only ever true for a run where the user asked for it
+        // (the checkbox in the tagging page): OCR runs about a second per photo,
+        // an order of magnitude more than everything else put together. Photos
+        // already read are skipped even then, because a row -- even an empty one
+        // meaning "no text here" -- is enough to know the answer.
+        'include_ocr': readText && appOcrs.of(entry.id) == null,
       });
     }
     return (payload: payload, carried: carried, failures: failures);
