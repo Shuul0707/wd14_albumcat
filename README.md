@@ -93,7 +93,7 @@ fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都�
 `插画`、`梗图`、`照片`、`截图` 这四个互斥标签来自一个小分类头：WD14 抽出的 768 维特征送进
 4 类 softmax（12 KB，在 `plugins/illustration/`），一张图只会拿到一个；冠军置信度不到 0.5 就
 **一个都不给**——宁可留空，也不把真实照片塞进「插画」。它跟 WD14 的标签一起在 `/plan` 里返回，
-手机端不需要任何改动（现有 v0.5.1 就认）。数据来源、训练命令、域外误判（cosplay／手办／油画照片）
+手机端不需要任何改动（现有 v0.6.0 就认）。数据来源、训练命令、域外误判（cosplay／手办／油画照片）
 见 [图片类型分类](docs/CLASSIFIER.md)。
 
 ## 快速开始
@@ -121,7 +121,7 @@ tools\albumcat.cmd plan samples\
 
 ### 2. 手机端
 
-1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.5.1 或更新**），
+1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.6.0 或更新**），
    或者按 [aves/FORK.md](aves/FORK.md) 自己构建；装好授权照片访问；
 2. 右上角 ✨ → **AI 打标签** → 填电脑地址 `http://192.168.1.10:8899` → **开始打标签**；
 3. 打完到 **Tags** 页，`角色|…` 会出现在那里。
