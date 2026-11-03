@@ -13,6 +13,8 @@ models/
 
 # user photos used for testing -- never commit these
 samples/
+# labelled corpus for the /ui accuracy panel (--truth-dir); still people's photos
+meme_chahua_samples/
 
 # runtime state (journal, caches) -- added later. Anchored to the repo root so
 # it does not swallow source data such as src/albumcat/data/tag_zh.json.

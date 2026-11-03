@@ -373,6 +373,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         port=args.port,
         token=args.token or "",
         warmup=not args.no_warmup,
+        truth_dir=args.truth_dir or "",
     )
     return 0
 
@@ -437,6 +438,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="require this value in X-Albumcat-Token (default: no auth, LAN only)",
     )
     p.add_argument("--no-warmup", action="store_true", help="skip the warmup inference")
+    p.add_argument(
+        "--truth-dir",
+        default="",
+        help="folder of per-class subfolders; /ui then prints the accuracy of this run",
+    )
     p.set_defaults(func=cmd_serve)
 
     return parser

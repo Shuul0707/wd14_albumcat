@@ -80,6 +80,7 @@ from .semantic import (
 )
 from .tagdict import TagDictionary, load_dictionary
 from .tagfields import plan_to_tag_fields
+from .truth import build_truth_map
 from .webui import INDEX_HTML
 
 __all__ = ["TaggingService", "serve"]
@@ -117,8 +118,11 @@ def _lan_ips() -> list[str]:
 class TaggingService:
     """Loads the model once and answers plan requests."""
 
-    def __init__(self, config: Config, *, warmup: bool = True) -> None:
+    def __init__(self, config: Config, *, warmup: bool = True, truth_dir: str = "") -> None:
         self.config = config
+        # optional: a folder tree whose subfolders name the four classes, so the
+        # page can score itself instead of just looking pretty
+        self.truth_dir = str(truth_dir or "")
         self.pipeline = Pipeline(config, tagger=load_tagger(config, warmup=warmup))
         # Chinese-CLIP is optional: a missing model leaves `available` False and
         # the tagging endpoints keep working exactly as before.
@@ -464,6 +468,22 @@ class TaggingService:
         info["ok"] = True
         return info
 
+    # -- ground truth ------------------------------------------------------ #
+
+    def truth_view(self) -> dict:
+        """Which class each sample file really is, so the page can score itself.
+
+        Off by default: only ``--truth-dir`` turns it on, because scanning a
+        folder is meaningless without one.
+        """
+        if not self.truth_dir:
+            return {"ok": False, "reason": "没有设 --truth-dir，页面算不出准确度"}
+        info = build_truth_map(self.truth_dir)
+        if not info.get("exists"):
+            return {"ok": False, "reason": f"标准答案目录不存在：{info.get('dir')}"}
+        info["ok"] = True
+        return info
+
     # -- semantic ---------------------------------------------------------- #
 
     def _semantic_block(self, image, dtype: str | None = None) -> dict | None:
@@ -631,6 +651,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == "/ocr":
             self._send(200, self.service.ocr_info())
+            return
+        if path == "/truth":
+            self._send(200, self.service.truth_view())
             return
         if path == "/semantic/model":
             self._send_model()
@@ -908,8 +931,9 @@ def serve(
     port: int = 8899,
     token: str = "",
     warmup: bool = True,
+    truth_dir: str = "",
 ) -> None:
-    service = TaggingService(config, warmup=warmup)
+    service = TaggingService(config, warmup=warmup, truth_dir=truth_dir)
     httpd = ThreadingHTTPServer((host, port), make_handler(service, token))
     httpd.daemon_threads = True
 
@@ -921,6 +945,8 @@ def serve(
         log.warning("no token set - anyone on this LAN can use the model (--token to lock it)")
     _warn_if_firewalled(host, port, ips)
     log.info("model: %s", (service.tagger.describe() if service.tagger else "none"))
+    if truth_dir:
+        log.info("ground truth: %s (the /ui page will score itself)", truth_dir)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

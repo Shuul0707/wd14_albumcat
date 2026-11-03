@@ -178,6 +178,37 @@ INDEX_HTML = r"""<!doctype html>
   .meta { font-size: 11px; color: #6c7688; display: flex; justify-content: space-between; gap: 8px; }
   .prior { font-size: 11px; color: var(--warn); }
   .err { color: var(--bad); font-size: 12px; }
+
+  /* 准确度：只有服务端带了 --truth-dir 才出现，平时整块隐藏 */
+  .score {
+    display: none; margin: 14px 0 4px; padding: 14px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .score .head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .score .big { font-size: 32px; font-weight: 700; letter-spacing: -.5px; line-height: 1.1; }
+  .score .big.hit { color: var(--ok); }
+  .score .big.mid { color: var(--warn); }
+  .score .big.low { color: var(--bad); }
+  .score .lines { margin-top: 12px; display: grid; gap: 7px; }
+  .score .line {
+    display: grid; grid-template-columns: 58px 74px minmax(90px, 1fr) 250px;
+    gap: 10px; align-items: center; font-size: 12px;
+  }
+  .score .line .who { display: flex; align-items: center; gap: 6px; }
+  .score .meter { height: 8px; border-radius: 999px; background: #0b0d11; overflow: hidden; max-width: 420px; }
+  .score .meter i { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
+  .score .wrong { color: var(--muted); }
+  .score .wrong b { color: var(--bad); font-weight: 600; }
+  .tile .mark {
+    position: absolute; top: 5px; right: 5px; z-index: 2;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #0b0d11;
+  }
+  .tile .mark.ok { background: var(--ok); }
+  .tile .mark.bad { background: var(--bad); }
+  #detail .truth { font-size: 12px; color: var(--ok); }
+  #detail .truth.bad { color: var(--bad); }
 </style>
 </head>
 <body>
@@ -221,6 +252,7 @@ INDEX_HTML = r"""<!doctype html>
   <div class="hint">图片只在你的浏览器里排队，按下「开始分类」才会上传；不落盘、不联网</div>
 </div>
 
+<div class="score" id="score"></div>
 <div class="chips" id="chips"></div>
 
 <div class="tiles" id="pool"></div>
@@ -238,6 +270,7 @@ INDEX_HTML = r"""<!doctype html>
       </div>
       <div class="bars" id="dbars"></div>
       <div class="prior" id="dprior"></div>
+      <div class="truth" id="dtruth"></div>
       <div class="chars" id="dchars"></div>
       <div class="tags" id="dtags"></div>
       <div class="err" id="derr"></div>
@@ -265,6 +298,9 @@ let stopFlag = false;
 let doneCount = 0;
 let totalCount = 0;
 let renderQueued = false;
+// filled from /truth when the server was started with --truth-dir; empty
+// otherwise, in which case the page just never mentions accuracy
+let truth = { available: false, classes: {}, counts: {}, reason: "" };
 
 const $ = (id) => document.getElementById(id);
 const tokenInput = $("token");
@@ -511,6 +547,121 @@ function classLabels() {
   return CLASS_FALLBACK.slice();
 }
 
+// ---------------------------------------------------------------- ground truth
+
+async function loadTruth() {
+  try {
+    const res = await fetch("/truth", { headers: head() });
+    const data = await res.json().catch(() => null);
+    if (data && data.ok && data.classes && Object.keys(data.classes).length) {
+      truth = { available: true, classes: data.classes, counts: data.counts || {}, reason: "" };
+    } else {
+      truth.reason = (data && data.reason) || "";
+    }
+  } catch (err) {
+    truth.reason = String(err.message || err);
+  }
+  schedule();
+}
+
+function truthOf(it) { return truth.available ? (truth.classes[it.name] || "") : ""; }
+function judged(it) { return it.state === "done" || it.state === "error"; }
+
+function isWrong(it) {
+  const real = truthOf(it);
+  if (!real || !judged(it)) return false;
+  return verdict(it).key !== real;
+}
+
+// one truth row per class, plus the total: what the folder promised vs what came out
+function scoreRows() {
+  const rows = new Map();
+  let n = 0, hit = 0, pending = 0, unknown = 0;
+  for (const it of items) {
+    const real = truthOf(it);
+    if (!real) { unknown++; continue; }
+    if (!judged(it)) { pending++; continue; }
+    if (!rows.has(real)) rows.set(real, { truth: real, n: 0, hit: 0, wrong: new Map() });
+    const row = rows.get(real);
+    const got = verdict(it).key;
+    row.n++; n++;
+    if (got === real) { row.hit++; hit++; }
+    else row.wrong.set(got, (row.wrong.get(got) || 0) + 1);
+  }
+  return { rows, n, hit, pending, unknown };
+}
+
+function renderScore() {
+  const el = $("score");
+  el.textContent = "";
+  if (!truth.available) { el.style.display = "none"; return; }
+  const { rows, n, hit, pending, unknown } = scoreRows();
+  if (!n && !pending) { el.style.display = "none"; return; }
+  el.style.display = "block";
+
+  const head = document.createElement("div");
+  head.className = "head";
+  const big = document.createElement("div");
+  big.className = "big " + (n ? (hit / n >= 0.8 ? "hit" : hit / n >= 0.6 ? "mid" : "low") : "mid");
+  big.textContent = n ? pct(hit / n) + "%" : "—";
+  head.appendChild(big);
+  const said = document.createElement("div");
+  said.className = "sub";
+  said.textContent = "准确度：判对 " + hit + " / " + n + " 张"
+    + (pending ? "（还有 " + pending + " 张没分类）" : "")
+    + (unknown ? "，" + unknown + " 张没有标准答案" : "")
+    + " · 标准答案来自服务端 --truth-dir";
+  head.appendChild(said);
+  el.appendChild(head);
+
+  const lines = document.createElement("div");
+  lines.className = "lines";
+  const order = classLabels();
+  for (const label of order) {
+    const row = rows.get(label);
+    if (!row) continue;
+    const line = document.createElement("div");
+    line.className = "line";
+
+    const who = document.createElement("div");
+    who.className = "who";
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = colorOf(label);
+    who.appendChild(dot);
+    who.appendChild(document.createTextNode(label));
+    line.appendChild(who);
+
+    const nb = document.createElement("div");
+    nb.className = "sub";
+    nb.textContent = row.n + " 张";
+    line.appendChild(nb);
+
+    const meter = document.createElement("div");
+    meter.className = "meter";
+    const fill = document.createElement("i");
+    fill.style.width = Math.max(1, Math.round((row.hit / row.n) * 100)) + "%";
+    meter.appendChild(fill);
+    line.appendChild(meter);
+
+    const detail = document.createElement("div");
+    detail.className = "wrong";
+    const rate = Math.round((row.hit / row.n) * 100);
+    const parts = [row.hit + " 张判对 · " + rate + "%"];
+    if (row.wrong.size) {
+      const list = [];
+      row.wrong.forEach((count, got) => list.push(got + " " + count));
+      parts.push("误判 " + list.join("、"));
+    }
+    detail.textContent = parts.join("  ");
+    line.appendChild(detail);
+    lines.appendChild(line);
+  }
+  el.appendChild(lines);
+}
+
+
+
 // ---------------------------------------------------------------- rendering
 
 function schedule() {
@@ -534,20 +685,31 @@ function render() {
     $("groups").textContent = "";
     $("empty").style.display = "block";
     $("chips").textContent = "";
+    $("score").textContent = "";
+    $("score").style.display = "none";
     updateControls();
     return;
   }
   $("empty").style.display = "none";
+  renderScore();
   if (showPool) renderPool(); else renderGroups();
   renderChips();
   updateControls();
+}
+
+// the chips and the two views have to agree on what a filter means, or "只看判错的"
+// would work in one view and silently do nothing in the other
+function visible(it) {
+  if (filter === "__wrong") return isWrong(it);
+  if (!filter) return true;
+  return verdict(it).key === filter;
 }
 
 function renderPool() {
   const pool = $("pool");
   pool.textContent = "";
   for (const it of items) {
-    if (filter && verdict(it).key !== filter) continue;
+    if (!visible(it)) continue;
     pool.appendChild(tile(it));
   }
 }
@@ -564,9 +726,8 @@ function renderGroups() {
   const labels = classLabels();
   const order = labels.concat([NONE_LABEL]);
   for (const key of order) {
-    const list = (by.get(key) || []).slice();
+    const list = (by.get(key) || []).filter(visible);
     if (!list.length) continue;
-    if (filter && filter !== key) continue;
     list.sort((a, b) => {
       const sa = verdict(a).score, sb = verdict(b).score;
       if (sa === null && sb === null) return 0;
@@ -602,13 +763,24 @@ function tile(it) {
   const v = verdict(it);
   const el = document.createElement("div");
   el.className = "tile" + (it.state === "done" ? " ready" : "");
-  el.title = it.path || it.name;
+  el.title = (truthOf(it) ? "标准答案 " + truthOf(it) + " · " : "") + (it.path || it.name);
 
   const img = document.createElement("img");
   img.alt = it.name;
   img.loading = "lazy";
   if (it.thumb) img.src = it.thumb;
   el.appendChild(img);
+
+  // a tick/cross only means something once the server answered
+  const real = truthOf(it);
+  if (real && judged(it)) {
+    const mark = document.createElement("span");
+    const wrong = v.key !== real;
+    mark.className = "mark " + (wrong ? "bad" : "ok");
+    mark.textContent = wrong ? "✗" : "✓";
+    mark.title = "标准答案 " + real + "，判成 " + v.key;
+    el.appendChild(mark);
+  }
 
   if (it.state === "busy" || it.state === "building" || it.state === "pending") {
     const spin = document.createElement("div");
@@ -658,6 +830,17 @@ function renderChips() {
     chips.appendChild(el);
   };
   mk("全部", "", items.length, "");
+  const wrong = items.filter(isWrong).length;
+  if (wrong) {
+    const el = document.createElement("button");
+    el.className = "chip" + (filter === "__wrong" ? " on" : "");
+    el.textContent = "只看判错的 ";
+    const b = document.createElement("b");
+    b.textContent = wrong;
+    el.appendChild(b);
+    el.onclick = () => { filter = filter === "__wrong" ? "" : "__wrong"; schedule(); };
+    chips.appendChild(el);
+  }
   for (const label of classLabels().concat([NONE_LABEL])) {
     const n = counts.get(label);
     if (n) mk(label, label, n, colorOf(label));
@@ -762,6 +945,18 @@ function openDetail(it) {
     $("dprior").style.display = "none";
   }
 
+  const real = truthOf(it);
+  if (real && judged(it)) {
+    const wrong = v.key !== real;
+    $("dtruth").textContent = wrong
+      ? "标准答案 " + real + " · 判成 " + v.key + (v.score === null ? "" : " " + pct(v.score) + "%") + " ✗"
+      : "标准答案 " + real + " · 判对 ✓";
+    $("dtruth").className = "truth" + (wrong ? " bad" : "");
+    $("dtruth").style.display = "block";
+  } else {
+    $("dtruth").style.display = "none";
+  }
+
   if (it.result && it.result.characters && it.result.characters.length) {
     $("dchars").textContent = it.result.characters.slice(0, 5).map((c) => c.label + " " + pct(c.score) + "%").join(" · ");
     $("dchars").style.display = "block";
@@ -829,6 +1024,7 @@ $("dclose").addEventListener("click", closeDetail);
 $("detail").addEventListener("click", (e) => { if (e.target === $("detail")) closeDetail(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
+loadTruth();
 render();
 </script>
 </body>

@@ -67,3 +67,22 @@ def test_the_http_path_never_derives_the_size_from_the_uploaded_bytes():
     assert "origin_size=(int(width), int(height))" in classify
     plan = inspect.getsource(server.TaggingService.plan_bytes)
     assert "origin_size=(int(width), int(height))" in plan
+
+
+def test_the_page_scores_itself_against_the_servers_truth_map():
+    # the accuracy panel is the difference between "looks right" and "68% right"
+    assert '"/truth"' in inspect.getsource(server._Handler.do_GET)
+    assert 'fetch("/truth"' in INDEX_HTML
+    for word in ("准确度", "只看判错的", "标准答案"):
+        assert word in INDEX_HTML
+
+
+def test_truth_is_off_until_the_operator_points_at_a_folder():
+    # scanning an arbitrary directory must never be implicit
+    from albumcat import cli
+
+    assert "self.truth_dir" in inspect.getsource(server.TaggingService.truth_view)
+    assert "--truth-dir" in inspect.getsource(server.TaggingService.truth_view)
+    assert '"--truth-dir"' in inspect.getsource(cli.build_parser)
+    assert 'truth_dir=args.truth_dir or ""' in inspect.getsource(cli.cmd_serve)
+
