@@ -162,6 +162,7 @@ class Pipeline:
         path: str = "",
         threshold: float | None = None,
         character_threshold: float | None = None,
+        origin_size: tuple[int, int] | None = None,
     ) -> tuple[TagPlan, TagSet]:
         """Run one decoded image through the whole chain."""
         plan, tagset, _item = self.inspect_image(
@@ -170,6 +171,7 @@ class Pipeline:
             path=path,
             threshold=threshold,
             character_threshold=character_threshold,
+            origin_size=origin_size,
         )
         return plan, tagset
 
@@ -181,12 +183,19 @@ class Pipeline:
         path: str = "",
         threshold: float | None = None,
         character_threshold: float | None = None,
+        origin_size: tuple[int, int] | None = None,
     ) -> tuple[TagPlan, TagSet, "ImageItem | None"]:
         """Like :meth:`plan_image`, but also hand back the ``ImageItem``.
 
         The item is what carries WD14's embedding, and therefore the only way to
         ask a plugin for its *unfiltered* scores -- the phone never needs them,
         the web UI (``/classify``) does. ``None`` when no plugin ran.
+
+        ``origin_size`` is the image's real ``(width, height)`` in pixels, which
+        is **not** always ``image.size``: the phone uploads a 448 px square, and a
+        size prior must never judge a thumbnail. ``None`` means "ask the image"
+        (right for a local file), while ``(0, 0)`` means "the caller does not
+        know" and disables the prior for this item.
         """
         result = self.tagger.interrogate(
             image,
@@ -201,12 +210,16 @@ class Pipeline:
 
         item = None
         if self.registry.recognizers:
+            if origin_size is None:
+                origin_size = (int(image.size[0]), int(image.size[1]))
             item = ImageItem(
                 path=path,
                 asset_id=asset_id,
                 image=image,
                 base=tagset,
                 embedding=result.embedding,
+                width=int(origin_size[0]),
+                height=int(origin_size[1]),
             )
             tagset.update(self.registry.recognize(item))
 

@@ -50,3 +50,20 @@ def test_the_page_shows_the_losers_too():
     # the whole point: a runner-up is what makes a wrong call arguable
     assert "弃权" in INDEX_HTML
     assert "scores" in INDEX_HTML
+
+
+def test_the_page_sends_the_original_size_for_the_size_prior():
+    # the browser downscales before uploading, so it has to remember the real
+    # dimensions itself; the classifier can only ever see a 448 px square
+    assert "width: w0" in INDEX_HTML and "height: h0" in INDEX_HTML
+    assert "size_prior" in INDEX_HTML
+    source = inspect.getsource(server._Handler._handle_classify)
+    assert 'width=int(obj.get("width") or 0)' in source, "the page's size never reaches the service"
+
+
+def test_the_http_path_never_derives_the_size_from_the_uploaded_bytes():
+    """A 448 px thumbnail must not be judged as a 448 px original."""
+    classify = inspect.getsource(server.TaggingService.classify_bytes)
+    assert "origin_size=(int(width), int(height))" in classify
+    plan = inspect.getsource(server.TaggingService.plan_bytes)
+    assert "origin_size=(int(width), int(height))" in plan

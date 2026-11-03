@@ -74,7 +74,12 @@ class Report:
 
 
 def walk(root: Path = ROOT):
-    """Yield every interesting text file, skipping artefacts and binaries."""
+    """Yield every interesting text file, skipping artefacts and binaries.
+
+    A file another process holds (Gradle rewriting an APK while a build runs,
+    an editor's lock) is skipped rather than crashing the whole run: the checks
+    are about tracked text, and a locked artefact is not a hygiene problem.
+    """
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -87,7 +92,10 @@ def walk(root: Path = ROOT):
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 # ---------------------------------------------------------------------- #

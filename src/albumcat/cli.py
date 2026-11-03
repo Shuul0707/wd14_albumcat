@@ -228,6 +228,15 @@ def cmd_plugins(args: argparse.Namespace) -> int:
             f"{row['priority']:5d} {row['threshold']:5.2f}  {row['ready']}"
             + (f"  ({row['reason']})" if not row["ready"] and row["reason"] else "")
         )
+        # A size prior is invisible in the scores until you know it is there, so
+        # print it next to the threshold it quietly competes with.
+        prior = row.get("size_prior")
+        if prior:
+            print(
+                f"{'':24s} size prior: {prior['label']} "
+                f"{prior['boost']:+.2f} at <= {prior['small_edge']} px, "
+                f"{prior['suppress']:+.2f} at >= {prior['large_edge']} px"
+            )
     for plugin_id, reason in registry.errors:
         print(f"  ERROR {plugin_id}: {reason}")
     return 0

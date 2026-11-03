@@ -89,6 +89,21 @@ tools\albumcat.cmd plugins
 （实测 1.14 s/张 vs 83 ms/张）。仓库里 `plugins/kind/` 就是这个头的成品，数据集怎么攒
 （三个下载器 + 跨类去重）和实测指标见 [图片类型分类](CLASSIFIER.md)。
 
+#### 可选的 `size_prior`：用原图分辨率补一刀
+
+模型只看得到 448×448，原图多少像素它不知道；但「几百像素」和「四五千像素」本身就能说明问题。
+任何 `feature` 插件都能在 `plugin.json` 里声明一个先验，作用在**分类头之后**：
+
+```json
+"size_prior": {"label": "梗图", "small_edge": 640, "large_edge": 2400, "boost": 0.8, "suppress": -0.4}
+```
+
+长边 ≤ `small_edge` 给 `label` 加 `boost`，≥ `large_edge` 加 `suppress`，中间按 log2 长边插值、两端截断，
+然后重新归一化——只挪分数，不增删标签。**只有客户端报了原图宽高才生效**：手机上传的是 448 缩略图，
+服务端从不拿上传字节的尺寸当原图尺寸，所以没有 `width`/`height` 就等于关掉（老 APK 就是这样）。
+`albumcat plugins` 会把生效中的先验打出来，`/ui` 每张卡片也会写它挪了多少。
+实测收益与为什么不选更强的那档，见 [分辨率先验](CLASSIFIER.md#分辨率先验size_prior)。
+
 > **不需要上游的拆分模型。** 上游 README 让你用 `split_model.py` 切出
 > 1.2 GB 的 `feature_extractor.onnx` + 43 MB 的 `classifier.onnx`；本项目改用
 > `tools\add_feature_output.py` 把特征张量声明成原模型的**额外输出**，

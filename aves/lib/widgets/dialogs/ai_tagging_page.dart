@@ -240,7 +240,7 @@ class _AiTaggingPageState extends State<AiTaggingPage> {
                       settings.aiTaggingIncludeGeneral = v != true;
                     }),
             title: const Text('只标角色（推荐）'),
-            subtitle: const Text('关掉则连场景、服饰等普通标签一起标'),
+            subtitle: const Text('关掉则连场景、服饰、画面类型（插画/梗图）一起标'),
           ),
           CheckboxListTile(
             controlAffinity: ListTileControlAffinity.leading,

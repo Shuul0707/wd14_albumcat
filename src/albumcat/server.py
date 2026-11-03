@@ -134,6 +134,10 @@ class TaggingService:
         self.cache_hits = 0
         self.started = time.time()
         self._tagdict: TagDictionary | None = None
+        # Whether any client has ever told us an original size. Logged once, so a
+        # phone running a build that predates the size prior is diagnosable from
+        # the server side instead of looking like "the prior does nothing".
+        self._size_seen = False
 
     # -- introspection ----------------------------------------------------- #
 
@@ -219,6 +223,8 @@ class TaggingService:
         include_vector: bool = False,
         include_ocr: bool = False,
         vector_dtype: str | None = None,
+        width: int = 0,
+        height: int = 0,
     ) -> dict:
         """Tag one already-encoded image and return the finished tag set.
 
@@ -230,11 +236,20 @@ class TaggingService:
         ``vector_dtype`` overrides the configured wire format per request --
         a client that can memory-map float32 (``Float32List.view``) asks for
         that instead of decoding half-floats by hand.
+
+        ``width``/``height`` are the photo's original pixels, used only by a
+        plugin's size prior. They are deliberately **not** derived from ``data``:
+        the phone sends a 448 px thumbnail, and 448 px is exactly what a meme
+        looks like.
         """
         dtype = vector_dtype or self.config.semantic.dtype
         if dtype not in ("float16", "float32"):
             raise ValueError(f"unsupported vector_dtype: {dtype}")
         from PIL import Image  # local import: keeps module import cheap
+
+        if not self._size_seen and width > 0 and height > 0:
+            self._size_seen = True
+            log.info("size prior: first original size reported %dx%d (%s)", width, height, name)
 
         digest = hashlib.sha256(data).hexdigest()
         started = time.perf_counter()
@@ -260,7 +275,12 @@ class TaggingService:
         # onnxruntime sessions are thread-safe, but serialising here keeps the
         # GPU from being oversubscribed when several phones sync at once.
         with self._lock:
-            plan, tagset = self.pipeline.plan_image(image, asset_id=asset_id, path=name)
+            plan, tagset = self.pipeline.plan_image(
+                image,
+                asset_id=asset_id,
+                path=name,
+                origin_size=(int(width), int(height)),
+            )
             semantic_block = self._semantic_block(image, dtype)
             # OCR shares the lock even though it runs on CPU: two phones
             # syncing at once would otherwise start two OCR jobs per core and
@@ -321,7 +341,15 @@ class TaggingService:
             result["ocr"] = ocr_block
         return result
 
-    def classify_bytes(self, data: bytes, *, asset_id: str = "", name: str = "") -> dict:
+    def classify_bytes(
+        self,
+        data: bytes,
+        *,
+        asset_id: str = "",
+        name: str = "",
+        width: int = 0,
+        height: int = 0,
+    ) -> dict:
         """One image, scored for a **human**: every class, not just the winner.
 
         ``/plan`` deliberately answers only what the phone stores, and for an
@@ -329,6 +357,11 @@ class TaggingService:
         impossible to argue about from the phone's side. This is the same
         pipeline with the threshold left off, so the runner-up is visible
         (see ``/ui``).
+
+        ``width``/``height`` are the original pixels, which the browser page does
+        send (it remembers them before downscaling). They drive the size prior;
+        leaving them out is honest -- the classifier then says what it thinks from
+        the picture alone.
         """
         from PIL import Image  # local import: keeps module import cheap
 
@@ -341,7 +374,15 @@ class TaggingService:
             raise ValueError(f"cannot decode image: {type(exc).__name__}: {exc}") from exc
 
         with self._lock:
-            plan, tagset, item = self.pipeline.inspect_image(image, asset_id=asset_id, path=name)
+            plan, tagset, item = self.pipeline.inspect_image(
+                image,
+                asset_id=asset_id,
+                path=name,
+                # Explicit, even when unknown: the decode above used the bytes the
+                # browser sent, which are downscaled, so falling back to
+                # ``image.size`` here would feed the size prior a lie.
+                origin_size=(int(width), int(height)),
+            )
 
         flat, hierarchical = plan_to_tag_fields(plan, self.config.publish)
         classifiers: list[dict] = []
@@ -349,17 +390,26 @@ class TaggingService:
             manifest = recognizer.manifest
             if not manifest.labels or item is None:
                 continue
-            scores = recognizer.scores(item)
-            if not scores:
+            scored = recognizer.scored(item)
+            if not scored.adjusted:
                 continue
-            best = max(scores, key=lambda pair: pair[1])
+            prior = getattr(recognizer, "size_prior", None)
+            best = max(scored.adjusted, key=lambda pair: pair[1])
             classifiers.append({
                 "id": manifest.id,
                 "name": manifest.name or manifest.id,
                 "exclusive": bool(getattr(recognizer, "exclusive", False)),
                 "threshold": manifest.threshold,
-                "labels": [label for label, _ in scores],
-                "scores": [round(score, 4) for _, score in scores],
+                "labels": [label for label, _ in scored.adjusted],
+                "scores": [round(score, 4) for _, score in scored.adjusted],
+                # the head's own opinion, so a person can see what the size prior
+                # did -- equal to ``scores`` when it did nothing
+                "raw_scores": [round(score, 4) for _, score in scored.raw],
+                "size_prior": (
+                    {"label": prior.label, "delta": round(scored.delta, 3)}
+                    if prior is not None and scored.delta != 0.0
+                    else None
+                ),
                 "picked": best[0] if best[1] >= manifest.threshold else None,
             })
 
@@ -368,6 +418,7 @@ class TaggingService:
             "id": asset_id,
             "name": name,
             "ms": round((time.perf_counter() - started) * 1000, 1),
+            "size": {"width": int(width), "height": int(height)},
             "classifiers": classifiers,
             # the same lists the phone would store, trimmed for a small card
             "tags": flat[:24],
@@ -651,6 +702,8 @@ class _Handler(BaseHTTPRequestHandler):
             include_vector=bool(obj.get("include_vector", False)),
             include_ocr=bool(obj.get("include_ocr", False)),
             vector_dtype=(str(obj["vector_dtype"]) if obj.get("vector_dtype") else None),
+            width=int(obj.get("width") or 0),
+            height=int(obj.get("height") or 0),
         )
 
     def _send_model(self) -> None:
@@ -760,6 +813,8 @@ class _Handler(BaseHTTPRequestHandler):
                         self._decode_b64(image),
                         asset_id=asset_id,
                         name=str(obj.get("name") or ""),
+                        width=int(obj.get("width") or 0),
+                        height=int(obj.get("height") or 0),
                     )
                 )
             except ValueError as exc:
@@ -786,6 +841,8 @@ class _Handler(BaseHTTPRequestHandler):
             asset_id=asset_id,
             name=(q.get("name") or [""])[0],
             size=len(raw),
+            width=int((q.get("width") or ["0"])[0]),
+            height=int((q.get("height") or ["0"])[0]),
         )
 
     def _handle_batch(self, raw: bytes, ctype: str) -> dict:

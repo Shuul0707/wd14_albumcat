@@ -87,6 +87,7 @@ INDEX_HTML = r"""<!doctype html>
   .tags { font-size: 12px; color: var(--muted); word-break: break-word; }
   .chars { font-size: 12px; color: var(--ok); }
   .meta { font-size: 11px; color: #6c7688; display: flex; justify-content: space-between; gap: 8px; }
+  .prior { font-size: 11px; color: var(--warn); }
   .err { color: var(--bad); font-size: 12px; }
   .empty { color: var(--muted); padding: 30px 0; text-align: center; }
   .hint { color: #6c7688; font-size: 12px; margin-top: 6px; }
@@ -105,6 +106,7 @@ INDEX_HTML = r"""<!doctype html>
     <div class="sub">
       四个类别是互斥的 softmax：<code>截图 / 插画 / 梗图 / 照片</code>。
       这里显示<b>全部</b>分数（手机端只收到冠军那一个），低于阈值就弃权。
+      浏览器会把原图尺寸一起发过去：分辨率小到像表情包、或大到不像梗图的，会再挪一点。
     </div>
   </div>
   <div class="row">
@@ -177,7 +179,10 @@ async function toDataUrl(file) {
   canvas.height = h;
   canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
   if (bitmap.close) bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.85);
+  // The original dimensions travel with the thumbnail: the classifier is
+  // resolution-blind (it only ever sees a 448 px square), so the only chance it
+  // gets to know the photo's real size is if this page says so.
+  return { url: canvas.toDataURL("image/jpeg", 0.85), width: w0, height: h0 };
 }
 
 function addFiles(files) {
@@ -205,7 +210,13 @@ async function pump() {
       for (const it of batch) {
         try {
           it.thumb = await toDataUrl(it.file);
-          payload.push({ id: it.id, name: it.name, image: it.thumb });
+          payload.push({
+            id: it.id,
+            name: it.name,
+            image: it.thumb.url,
+            width: it.thumb.width,
+            height: it.thumb.height,
+          });
         } catch (err) {
           it.busy = false;
           it.error = String(err.message || err);
@@ -307,7 +318,7 @@ function card(it) {
   const thumb = document.createElement("img");
   thumb.className = "thumb";
   thumb.alt = it.name;
-  if (it.thumb) thumb.src = it.thumb;
+  if (it.thumb) thumb.src = it.thumb.url || it.thumb;
   el.appendChild(thumb);
 
   const body = document.createElement("div");
@@ -375,12 +386,30 @@ function card(it) {
     const meta = document.createElement("div");
     meta.className = "meta";
     const left = document.createElement("span");
-    left.textContent = cl.id + " · 阈值 " + cl.threshold.toFixed(2);
+    const size = it.result && it.result.size;
+    const px = size && size.width && size.height ? size.width + "×" + size.height : "尺寸未知";
+    left.textContent = cl.id + " · 阈值 " + cl.threshold.toFixed(2) + " · " + px;
     const right = document.createElement("span");
     right.textContent = it.result && it.result.ms ? it.result.ms + " ms" : "";
     meta.appendChild(left);
     meta.appendChild(right);
     body.appendChild(meta);
+
+    // Say it out loud when resolution moved the answer: this page exists to make
+    // the classifier's reasoning contestable, and an invisible adjustment is
+    // exactly the kind of thing that is impossible to argue about.
+    const prior = cl.size_prior;
+    if (prior && prior.delta) {
+      const note = document.createElement("div");
+      note.className = "prior";
+      const raw = cl.raw_scores && w.index >= 0 ? cl.raw_scores[w.index] : null;
+      const moved = raw !== null && Math.abs(raw - cl.scores[w.index]) > 0.0005
+        ? "（" + prior.label + " " + pct(raw) + "% → " + pct(cl.scores[w.index]) + "%）"
+        : "";
+      const sign = prior.delta > 0 ? "+" : "";
+      note.textContent = "尺寸先验 " + prior.label + " " + sign + prior.delta.toFixed(2) + moved;
+      body.appendChild(note);
+    }
 
     if (it.result.characters && it.result.characters.length) {
       const chars = document.createElement("div");

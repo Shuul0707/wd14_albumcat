@@ -56,6 +56,7 @@ from typing import Any, Iterable, Protocol, Sequence
 
 import numpy as np
 
+from .sizeprior import SizePrior
 from .types import CHARACTER, GENERAL, RATING, Prediction, TagSet
 
 __all__ = [
@@ -67,6 +68,7 @@ __all__ = [
     "PluginManifest",
     "PluginError",
     "ImageItem",
+    "Scored",
     "Recognizer",
     "RecognizerContext",
     "PluginRegistry",
@@ -189,6 +191,19 @@ class ImageItem:
     image: Any = None  # PIL.Image.Image
     embedding: np.ndarray | None = None
     base: TagSet = field(default_factory=TagSet)
+    # The *original* dimensions, when the caller knows them. They are no longer
+    # recoverable from ``image`` on the phone's path -- the payload is a 448 px
+    # square by then -- which is why they travel separately, and why 0 (unknown)
+    # has to be distinguishable from "small".
+    width: int = 0
+    height: int = 0
+
+    @property
+    def long_edge(self) -> int:
+        """Longest side in original pixels, or 0 when the caller did not say."""
+        if self.width <= 0 or self.height <= 0:
+            return 0
+        return max(self.width, self.height)
 
     def preview_bytes(self, fmt: str = "JPEG", quality: int = 85) -> bytes:
         if self.image is None:
@@ -211,6 +226,21 @@ class Recognizer(Protocol):
     def available(self) -> tuple[bool, str]: ...
 
 
+@dataclass(frozen=True)
+class Scored:
+    """A recogniser's scores: the head's own output and what the prior made of it.
+
+    ``adjusted`` equals ``raw`` whenever no size prior applies (no prior in the
+    manifest, or the caller did not report the original dimensions), so a caller
+    can always display ``adjusted`` and diff it against ``raw`` to see whether
+    resolution changed anything.
+    """
+
+    raw: list[tuple[str, float]] = field(default_factory=list)
+    adjusted: list[tuple[str, float]] = field(default_factory=list)
+    delta: float = 0.0
+
+
 class _Base:
     """Shared bookkeeping; subclasses implement ``_predict``."""
 
@@ -218,6 +248,9 @@ class _Base:
         self.manifest = manifest
         self.context = context
         self.exclusive = bool(manifest.extra.get("exclusive"))
+        # Resolution is invisible to a model that only ever sees a 448 px square,
+        # so a plugin may declare an explicit logit shift on one label instead.
+        self.size_prior = SizePrior.from_manifest(manifest.extra.get("size_prior"))
         self._loaded = False
         self._reason = ""
 
@@ -245,14 +278,38 @@ class _Base:
         different situation from 「梗图 0.02」, and the phone's tag list collapses
         both into the same single word. Recognisers with nothing to show return
         an empty list.
+
+        Size priors are already folded in: this is what the product will do.
         """
+        return self.scored(item).adjusted
+
+    def scored(self, item: ImageItem) -> "Scored":
+        """Raw head output and the prior-adjusted version, computed in one pass."""
         ok, _reason = self.available()
         if not ok:
-            return []
+            return Scored()
         try:
-            return [(str(key), float(score)) for key, score in self._scores(item)]
+            raw = [(str(key), float(score)) for key, score in self._scores(item)]
         except NotImplementedError:
-            return []
+            return Scored()
+        if self.size_prior is None or not raw:
+            return Scored(raw=raw, adjusted=raw)
+        delta = self.size_prior.delta(item.long_edge)
+        adjusted = self.size_prior.apply(raw, item.long_edge)
+        if delta != 0.0:
+            before = max(raw, key=lambda pair: pair[1])[0]
+            after = max(adjusted, key=lambda pair: pair[1])[0]
+            if before != after:
+                # The interesting case, and the one to grep for on a phone: a
+                # head that was sure, turned around by nothing but resolution.
+                log.info(
+                    "plugin %s: size prior flipped %s -> %s at the long edge of %d px",
+                    self.manifest.id,
+                    before,
+                    after,
+                    item.long_edge,
+                )
+        return Scored(raw=raw, adjusted=adjusted, delta=delta)
 
     def _predict(self, item: ImageItem) -> Iterable[Prediction]:
         raise NotImplementedError
@@ -345,7 +402,7 @@ class OnnxHeadRecognizer(_Base):
         return True, ""
 
     def _predict(self, item: ImageItem) -> list[Prediction]:
-        scores = self._scores(item)
+        scores = self.scores(item)
         return self._predictions([key for key, _ in scores], [value for _, value in scores])
 
     def _scores(self, item: ImageItem) -> list[tuple[str, float]]:
@@ -636,6 +693,7 @@ class PluginRegistry:
         for manifest in self._manifests:
             rec = next((r for r in self.recognizers if r.manifest.id == manifest.id), None)
             ok, reason = rec.available() if rec is not None else (False, "not loaded")
+            prior = getattr(rec, "size_prior", None)
             rows.append(
                 {
                     "id": manifest.id,
@@ -646,6 +704,17 @@ class PluginRegistry:
                     "threshold": manifest.threshold,
                     "ready": ok,
                     "reason": reason,
+                    "size_prior": (
+                        None
+                        if prior is None
+                        else {
+                            "label": prior.label,
+                            "small_edge": prior.small_edge,
+                            "large_edge": prior.large_edge,
+                            "boost": prior.boost,
+                            "suppress": prior.suppress,
+                        }
+                    ),
                 }
             )
         return rows

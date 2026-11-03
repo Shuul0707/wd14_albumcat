@@ -317,6 +317,11 @@ class AiTaggingService {
         'id': '${entry.id}',
         'name': entry.bestTitle,
         'size': entry.sizeBytes ?? 0,
+        // The service's classifier only ever sees a 448 px square, so the one
+        // chance it has to know this photo's real resolution is here. Used for
+        // nothing but a size prior -- never for the tags themselves.
+        'width': entry.width,
+        'height': entry.height,
         'image': base64Encode(thumb.$1),
         'cache': true,
         // Ask for the Chinese-CLIP vector in the same round trip: tagging then
