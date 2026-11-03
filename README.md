@@ -91,9 +91,10 @@ fork 的源码在 [aves/](aves/FORK.md)，改了哪些地方、怎么构建都�
 | 只整理收藏的插画，不想混进梗图/表情包/截图 | `插画` |
 
 `插画`、`梗图`、`照片`、`截图` 这四个互斥标签来自一个小分类头：WD14 抽出的 768 维特征送进
-4 类 softmax（12 KB，在 `plugins/illustration/`），一张图只会拿到一个；冠军置信度不到 0.5 就
+4 类 softmax（12 KB，在 `plugins/kind/`），一张图只会拿到一个；冠军置信度不到 0.5 就
 **一个都不给**——宁可留空，也不把真实照片塞进「插画」。它跟 WD14 的标签一起在 `/plan` 里返回，
-手机端不需要任何改动（现有 v0.6.0 就认）。数据来源、训练命令、域外误判（cosplay／手办／油画照片）
+手机端不需要任何改动（现有 v0.6.0 就认）。实测动漫梗图 55/60 判成 `梗图`、只有 5/60 漏进 `插画`；
+代价是 25% 的干净插画会被叫成 `梗图`。数据来源、训练命令、阈值取舍、试过但没用的方向
 见 [图片类型分类](docs/CLASSIFIER.md)。
 
 ## 快速开始
@@ -199,7 +200,7 @@ App 会先探你填的地址，探不通就换手机自己的回环地址 `http:
 src/albumcat/        服务端：配置 / WD14 推理 / 规则 / 插件 / Chinese-CLIP / HTTP 服务 / 命令行
 aves/                手机端：Aves 的 fork 源码（标签与语义向量存进它自己的 appTags / appVectors 表）
 tools/               命令行入口、构建与验证脚本（albumcat.cmd、aves_build.ps1、verify_aves_tags.py …）
-plugins/             插件目录（`illustration/` 就是已训好的插画分类头，其余是示例）
+plugins/             插件目录（`kind/` 就是已训好的四类互斥头，其余是示例）
 tests/               pytest：规则、标签字段映射、配置（`python -m pytest`，不用模型）
 docs/                延伸阅读与 UI 证据截图
 config.toml          全部配置项，注释齐全

@@ -20,6 +20,21 @@ Check what is loaded:
 
     tools\albumcat.cmd plugins
 
+## What ships here
+
+| Directory | Answers | Emits |
+|-----------|---------|-------|
+| `kind/`   | "which of the four is this?" — one softmax over WD14's 768-d embedding | exactly one of `插画` / `梗图` / `照片` / `截图`, or nothing when the winner scores below 0.5 |
+| `example-flat-image/` | nothing useful — a 40-line `python` plugin to copy from | `待清理` for flat-coloured images |
+
+`kind/` is the trained classifier described in [docs/CLASSIFIER.md](../docs/CLASSIFIER.md):
+12 KB, no extra inference pass, ~1 ms per image. It replaces the older
+`illustration` head, which had no anime memes in its training data and therefore
+called almost every anime meme an illustration (55/60 of them are now tagged
+`梗图`, only 5/60 still leak into `插画`). `tests/test_shipped_plugins.py` keeps
+every manifest in here honest: id vs folder, `labels.json` vs manifest, sha256,
+ONNX input width vs `input_dim`, output width vs label count, softmax rows summing to 1.
+
 ## The five kinds
 
 | `kind`    | Needs                        | Use it for                                                    |

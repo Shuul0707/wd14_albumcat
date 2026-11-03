@@ -1,0 +1,16 @@
+{
+  "id": "kind",
+  "kind": "feature",
+  "name": "画面类型",
+  "description": "插画 / 梗图 / 照片 / 截图，softmax 互斥；验证集 6332 张同池划分 81.7% 全对",
+  "version": "2",
+  "target": "tag",
+  "priority": 10,
+  "threshold": 0.5,
+  "labels": ["截图", "插画", "梗图", "照片"],
+  "input_dim": 768,
+  "model": "head.onnx",
+  "sha256": "97f02c90f4ac6920d47aab3f8277941bbf37ec2df7994d00e27d06ffc0979b21",
+  "exclusive": true,
+  "activation": "softmax"
+}

@@ -66,13 +66,13 @@ tools\albumcat.cmd plugins
 一张图**只可能是其中一类**，比如「插画 / 梗图 / 照片 / 截图」。这时用 softmax 交叉熵：
 
 ```bat
-:: data\kindset\插画\*.jpg  data\kindset\梗图\*.jpg  data\kindset\照片\*.jpg
+:: data\kindset5\插画\*.jpg  data\kindset5\梗图\*.jpg  data\kindset5\照片\*.jpg  data\kindset5\截图\*.jpg
 :: 每个子目录恰好一个类别，不再有 background 目录
 .venv\Scripts\python.exe tools\train_feature_plugin.py ^
-  --data data\kindset --out plugins\illustration --id illustration ^
-  --name "插画分类" --target tag --threshold 0.5 ^
+  --data data\kindset5 --out plugins\kind --id kind ^
+  --name "画面类型" --target tag --threshold 0.5 ^
   --loss ce --class-weight ^
-  --cache data\kindset\embeddings.npz --binary-label 插画
+  --cache data\kindset5\embeddings.npz --binary-label 插画
 ```
 
 - `--loss ce` 要求每张图**恰好一个**标签（有 background 目录会直接报错退出，因为「无标签」在互斥问题里没有定义）。
@@ -84,6 +84,10 @@ tools\albumcat.cmd plugins
 - 导出的 `plugin.json` 会多两行 `"exclusive": true`、`"activation": "softmax"`。
   `exclusive` 让服务端只取**冠军类**，而且冠军置信度低于 `threshold` 时**一个标签都不发**——
   拿不准的照片宁可留空，也不要往「插画」里塞一张真实照片。
+
+⚠️ 抽特征前先关掉在跑的 `albumcat serve`：每个进程各持一个 DirectML 会话，抢起来会慢十倍
+（实测 1.14 s/张 vs 83 ms/张）。仓库里 `plugins/kind/` 就是这个头的成品，数据集怎么攒
+（三个下载器 + 跨类去重）和实测指标见 [图片类型分类](CLASSIFIER.md)。
 
 > **不需要上游的拆分模型。** 上游 README 让你用 `split_model.py` 切出
 > 1.2 GB 的 `feature_extractor.onnx` + 43 MB 的 `classifier.onnx`；本项目改用

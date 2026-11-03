@@ -6,8 +6,8 @@
 
 | 类别 | 标签 | 典型内容 |
 | --- | --- | --- |
-| `illustration` | `插画` | 二次元插画、AI 画、动画截图 |
-| `meme` | `梗图` | 带字的梗图、表情包、聊天截图里的图 |
+| `illustration` | `插画` | 二次元插画、AI 画、漫画分镜、动画截图 |
+| `meme` | `梗图` | 带字幕/描边字的梗图、表情包、Twitter 式截图 |
 | `photo` | `照片` | 相机拍的真实照片（含 cosplay、手办、油画照片这类难例） |
 | `screenshot` | `截图` | 手机/网页 UI 截图、文档截图 |
 
@@ -20,6 +20,7 @@
 | --- | --- |
 | 找某个角色的插画、梗图、表情包 | `角色\|…` 里的角色名，或者直接搜「黑暗的初音未来」 |
 | 只整理收藏的插画，不想混进梗图 / 表情包 / 截图 | Tags 页点 `插画` |
+| 反过来，只想看梗图/表情包 | Tags 页点 `梗图` |
 
 两套标签是叠加的，不是二选一：一张初音未来的插画同时有 `角色|初音未来` 和 `插画`，
 按角色筛、按类型筛、把两者一起搜都行。
@@ -27,57 +28,44 @@
 ⚠️ 手机端「只标角色（推荐）」勾着的时候，客户端只保存角色标签，`插画` 这类普通标签会被丢掉。
 想拿到类型标签，把那个勾去掉（`设置 → AI 打标签 → 只标角色`），或只对插画目录单独跑一轮。
 
+## 第一版错在哪（v2 为什么重训）
+
+第一版（2026-07，2,222 张）的「梗图」类用的是 HuggingFace `neuralcatcher/hateful_memes`——
+**欧美照片模板 + 白底黑字**，一张二次元梗图都没有。于是「动漫插画裁掉一块 + 一行描边字」
+在训练数据里根本不存在，模型只能把它当插画，`exclusive` 又只发冠军，用户看到的就是
+「二次元梗图基本都被分类为插画」。域内 99.8% 全对是真的，域外这个场景 100% 错也是真的。
+
+v2 换了数据：**正样本 = safebooru 的 `meme` 标签**（真的动漫梗图/漫画分镜/Twitter 截图），
+**难负样本 = 带字的普通插画**（`english_text` / `chinese_text` / `speech_bubble` 查询）。
+现在同一批 safebooru 梗图 **55/60 → `梗图`，只剩 5/60 漏进 `插画`**。
+
 ## 数据和训练
 
-数据不进仓库（`/data/` 已在 `.gitignore` 里），仓库里只有训练出来的头。要复现，
-先按下面的来源拉一遍，按类名建子目录，再跑一条命令。
-
-### 目录结构
-
-`--data` 指向的目录下，**每个子目录名就是一个类别**，目录里放 jpg/png：
-
-```
-data/datasets/kindset/
-├── 插画/   1002 张
-├── 梗图/    450 张
-├── 照片/    650 张
-└── 截图/    120 张
-```
-
-类名直接用中文，因为 `src/albumcat/types.py` 的 `prettify()` 对 CJK 原样返回：训练出的
-`labels.json` 就是 `["截图", "插画", "梗图", "照片"]`，手机端 Tags 页直接显示中文磁贴，不需要任何映射。
-（目录名以 `_` 开头会被当成「背景类」，那是给多标签训练用的，四类互斥时不要用。）
-
-### 数据来源（共 2222 张）
-
-| 类别 | 来源 | 张数 |
-| --- | --- | --- |
-| 插画 | `safebooru.org` XML API，轮换 `1girl solo` / `1boy solo` / `2girls` / `scenery` / `no humans` / `multiple boys` / `original` 等查询，取 `sample_url`（约 850 px 的 JPEG） | 1002 |
-| 梗图 | HuggingFace `neuralcatcher/hateful_memes` 的 `img/*.png`（真实带字梗图，只当负样本，不用它自己的标注） | 450 |
-| 照片 | `picsum.photos`（Unsplash 图）600 张 + Wikimedia Commons 搜 cosplay / figurine / oil painting 等 50 张难例 | 650 |
-| 截图 | HuggingFace `silatus/1k_Website_Screenshots_and_Metadata` 的 `screenshot.png` | 120 |
-
-下载器就是 `tools/fetch_illustration_dataset.py`（没有第三方依赖，`urllib` + PIL）：
+数据不进仓库（`/data/` 已在 `.gitignore` 里），仓库里只有训练出来的头。要复现，按顺序跑三个工具：
 
 ```bat
+REM 1) 四个「桶」的基础图：插画 / 照片 / 截图 + 一批欧美梗图
 python tools\fetch_illustration_dataset.py --out data\datasets\kind --illustrations 1000 --photos 600 --memes 450 --screenshots 120
-REM 插画不够就追补，--pages 是每个查询翻几页
 python tools\fetch_illustration_dataset.py --out data\datasets\kind --top-up --pages 3 --illustrations 600 --photos 0 --memes 0 --screenshots 0
+
+REM 2) 动漫梗图 vs 带字插画（这是 v2 的关键数据）
+python tools\fetch_meme_dataset.py --out data\datasets\meme_vs_illustration --positives 3000 --negatives 2000 --hard-negatives 1000
+
+REM 3) 拼成训练目录（按类名分子目录，跨类去重）
+python tools\build_kind_dataset.py --kind data\datasets\kind --meme data\datasets\meme_vs_illustration --out data\datasets\kindset5
 ```
 
-它存 `<label>-NNNNN.jpg`（长边缩到 640，`quality=88`），并写 `manifest.jsonl` 记来源 URL。
-要变成子目录，把文件按前缀 hardlink 过去（同一磁盘不占空间）：
+`build_kind_dataset.py` 的拼装规则（每个文件都 hardlink，同一磁盘不占空间）：
 
-```powershell
-$map = @{ illustration = '插画'; meme = '梗图'; photo = '照片'; screenshot = '截图' }
-foreach ($kv in $map.GetEnumerator()) {
-  $dir = "data\datasets\kindset\$($kv.Value)"; New-Item -ItemType Directory -Force $dir | Out-Null
-  Get-ChildItem "data\datasets\kind\$($kv.Key)-*.jpg" | ForEach-Object {
-    $dst = Join-Path $dir $_.Name
-    try { New-Item -ItemType HardLink -Path $dst -Target $_.FullName | Out-Null } catch { Copy-Item $_.FullName $dst }
-  }
-}
-```
+| 训练类 | 来自 |
+| --- | --- |
+| `插画/` | `kind/illustration-*.jpg` + `meme_vs_illustration/_插画/` 里**不带**字的那批 |
+| `梗图/` | `meme_vs_illustration/梗图/*.jpg` + `kind/meme-*.jpg` + `_插画/` 里 `texted-*` 的带字图 |
+| `照片/` | `kind/photo-*.jpg`（picsum + Wikimedia Commons 难例） |
+| `截图/` | `kind/screenshot-*.jpg` |
+
+跨类去重按 8×8 灰度均值哈希（两个下载器用不同 tag 查 safebooru，同一张图会重名，`--no-dedupe` 可关）。
+本次实跑：**插画 1,846 / 梗图 3,757 / 照片 617 / 截图 112 = 6,332 张，去重跳过 673 张**。
 
 ### 训练
 
@@ -85,14 +73,10 @@ foreach ($kv in $map.GetEnumerator()) {
 
 ```bat
 python tools\add_feature_output.py
-```
 
-然后：
-
-```bat
-python tools\train_feature_plugin.py --data data\datasets\kindset --loss ce --class-weight ^
-  --cache data\datasets\kindset\embeddings.npz --out plugins\illustration ^
-  --id illustration --name 插画分类 --target tag --threshold 0.5 ^
+python tools\train_feature_plugin.py --data data\datasets\kindset5 --loss ce --class-weight ^
+  --cache data\datasets\kindset5\embeddings.npz --out plugins\kind ^
+  --id kind --name 画面类型 --target tag --threshold 0.5 ^
   --epochs 400 --lr 0.05 --l2 3e-3 --val-frac 0.2 --binary-label 插画 --priority 10
 ```
 
@@ -101,69 +85,110 @@ python tools\train_feature_plugin.py --data data\datasets\kindset --loss ce --cl
 - `--loss ce` —— 走 softmax 交叉熵而不是多标签 sigmoid。它要求每张图**恰好一个**标签，
   导出的 ONNX 尾巴是 `Softmax`，`plugin.json` 里写 `"exclusive": true`、`"activation": "softmax"`，
   加载时 `plugins.py` 只取冠军类。用 `bce` 训出来的是「四个独立的是/否」，四类会同时亮。
-- `--class-weight` —— 逆频率加权再归一化到均值 1。截图只有 120 张，不加权会被压着打。
+- `--class-weight` —— 逆频率加权再归一化到均值 1。截图只有 112 张，不加权会被 3,757 张梗图压着打。
 - `--cache` —— 768 维特征的 npz 缓存，指纹是「路径 + 标签 + 大小 + mtime + 头尾各 8 KB 的哈希」。
-  调参重跑时命中缓存，几秒进入训练；动了图片就自动重算（同一 mtime tick 内改等长文件也能发现）。
+  调参重跑时命中缓存，几秒进入训练；动了图片就自动重算。
 - `--binary-label 插画` —— 额外打一行「插画 vs 其余」的 accuracy / precision / recall / f1 / AUC，
-  这才是用户真正关心的那个数。
+  这才是「只想整理插画」那拨用户真正关心的那个数。
 - `--threshold 0.5` —— 冠军低于它就不发标签（弃权）。
 
-整轮在 RTX 5060 上约 4 分钟，其中 2222 张抽特征约 3.5 分钟（DirectML，~10 张/秒）。
+整轮在 RTX 5060 上约 10 分钟，其中 6,332 张抽特征占绝大多数（DirectML，~80 ms/张）。
+⚠️ **抽特征前先关掉所有在跑的 `albumcat serve`**：每个进程各持一个 DirectML 会话，抢起来会慢十倍
+（实测 1.14 s/张 vs 83 ms/张）。
 
 ## 指标
 
-验证集 444 张（`--val-frac 0.2`，随机切分）：
+验证集 1,266 张（`--val-frac 0.2`，随机切分）：
 
 ```text
-exact-match (every label right): 99.8%
+exact-match (every label right): 81.7%      (训练集 91.7%)
 label        n+   TP   FP   FN  precision  recall   auc
-截图         22   22    0    0      1.000   1.000  1.000
-插画        209  209    0    0      1.000   1.000  1.000
-梗图         88   88    0    0      1.000   1.000  1.000
-照片        125  124    0    1      1.000   0.992  1.000
+截图         16   15    1    1      0.938   0.938  1.000
+插画        388  290  127   98      0.695   0.747  0.888
+梗图        751  620   88  131      0.876   0.826  0.910
+照片        111  109   10    2      0.916   0.982  0.999
 binary: '插画' vs everything else  (softmax winner)
-  accuracy 100.0%  precision 1.000  recall 1.000  f1 1.000  auc 1.000
-  confusion  tp 209  fp 0  fn 0  tn 235
+  accuracy  82.2%   precision 0.695   recall 0.750   f1 0.721   auc 0.888
+  confusion  tp 291  fp 128  fn 97  tn 750
 ```
 
-域内（四个来源同分布）几乎满分，所以真正看的是域外。
+`插画` 的 precision 只有 0.695 是因为**梗图常常长得像插画**（梗图本身就是插画加字），
+反过来 `梗图` 的 recall 0.826 说明 17% 的梗图还是被判成插画。这就是当前的天花板，见下面「试过但没用」。
+
+### 阈值换什么
+
+在全部 6,332 张上扫（含训练集，所以整体偏高，看的是**相对**变化）：
+
+| `threshold` | 发标签比例 | 准确率 | 说明 |
+| --- | --- | --- | --- |
+| 0.45 / 0.50 | 99.9% / 99.7% | 90.0% | 默认：几乎每张都给答案 |
+| 0.60 | 93.6% | 92.1% | 放弃 6% 拿不准的图，错判少两成 |
+
+只想整理插画、宁愿少几张也要干净，就把 `plugins/kind/plugin.json` 的 `threshold` 改成 `0.6`；
+想要「每张都有个类型」，就保持 `0.5`。**别靠调阈值救梗图**：被误判的梗图在 `插画` 上往往是 0.9+。
 
 ### 域外表现
 
-同一批头，喂它训练集里没有的东西（`.tmp/hard/`，不在仓库里）：
+喂训练集里没有的东西（`.tmp/hard/` 与 `.tmp/eval_meme.py` 的分组，不进仓库）：
 
 | 挑战 | 结果 |
 | --- | --- |
-| cosplay 照片 12 张 | 12/12 → `照片`（0.53–0.98） |
-| 动画截图 8 张 | 8/8 → `插画`（0.77–1.00） |
-| AI 生成图 8 张 | 8/8 → `插画`（0.95–1.00） |
-| 手办照片 10 张 | 5 `照片` / 3 `截图` / 1 `插画`(0.67) / 1 弃权 |
-| 油画照片 13 张 | 4 `照片` / 4 `插画` / 3 `梗图` / 1 `截图` / 1 弃权 |
+| safebooru 动漫梗图 60 张 | **55 `梗图`** / 5 `插画`（8%） |
+| 欧美梗图 30 张 | 19 `梗图` / 4 `截图` / 2 `照片` / 5 弃权 |
+| 干净插画 60 张 | 43 `插画` / **15 `梗图`** / 2 `照片` |
+| 带字插画 30 张 | 7 `插画` / 23 `梗图` |
+| picsum 照片 60 张 | 60 `照片` |
+| 网页截图 30 张 | 30 `截图` |
+| cosplay 照片 12 张 | 10 `照片` / 2 弃权 |
+| 手办照片 10 张 | 5 `照片` / 3 `截图` / 2 弃权 |
+| 动画截图 8 张 | 2 `插画` / **6 `梗图`** |
+| AI 生成图 8 张 | 3 `插画` / 5 `梗图` |
 
-读法：**「是不是插画」这件事，域外也基本靠得住**；「不是插画的那三类别是什么」会乱——
-手办照片被叫成截图、油画照片被叫成梗图，都属于出了域之后在四个桶里乱指。
-对使用者没有实质伤害（它们都不会进 `插画` 筛选，除了 4/13 的油画照片），但不要拿 `截图` 这个标签
-去当真做「找截图」的工具；它只在手机 UI 截图上可信。
+读法：
 
-加难例前后对比：第一版（只有 safebooru + picsum，没有 cosplay/手办/油画难例）cosplay 照片
-**只有 1/12 判对**、手办照片 4/10 误判成插画。把 50 张 Commons 难例塞进 `照片` 之后才变成 12/12。
-难例比数量重要。
+- **对第一类用户（梗图不再冒充插画）这件事，v2 基本解决了**：动漫梗图漏进 `插画` 从 v1 的
+  接近 100% 降到 8%。照片和截图两类在域外也是干净的。
+- **代价**：干净插画有 25% 被判成 `梗图`、动画截图和 AI 画也常被叫 `梗图`——
+  它们会从 `插画` 筛选里消失（不是把梗图混进插画，而是反过来漏掉）。
+  想稳妥就按「照片 / 截图 / 梗图」**反向**筛，或者把阈值提到 0.6 少要答案。
+- `截图` 只在 UI 截图上可信，别拿它当真做「找截图」。
+
+## 试过但没用的方向
+
+都不是拍脑袋，是同一批 1,400 张（700 梗图 / 700 插画）上量出来的：
+
+| 做法 | 结果 |
+| --- | --- |
+| 只用 768 维特征（现在这一版） | AUC 0.855、acc 77.5% |
+| 把 41 个版面/文字标签的分数拼进来（809 维） | AUC 0.853、acc 78.6% —— **没有增益**，标签本来就是同一个 ViT 推出来的 |
+| 只用标签分数 | AUC 0.821 |
+| 换 Chinese-CLIP 512 维 | AUC 0.828 |
+| WD14 768 + CLIP 512（1,280 维） | **AUC 0.907、acc 82.9%**（fp≤5% 时 recall 75.2%） |
+| 另训一个「梗图 vs 插画」二分类头 | 验证 81.9%，但**照片 30% 误判梗图**（域外漂移），已删除 |
+
+最后一行值得记：单输出 sigmoid 头在域内看着和四分类差不多，到了域外会把真实照片叫成梗图
+（平均分 0.84），比四分类更容易害人——所以仓库里只留四分类头。
+「拼 CLIP 能到 0.907」是已知的下一步，但需要给插件层加「消费 CLIP 向量」的新机制（现在
+`OnnxHeadRecognizer` 只吃 `item.embedding`），代价不小，没进这一版。
 
 ## 接入
 
 ```bat
 tools\albumcat.cmd plugins
-REM illustration  feature  tag  10  0.50  True
+REM kind  feature  tag  10  0.50  True
 tools\albumcat.cmd plan 你的图.jpg
 ```
 
-`plugins/illustration/` 里有三个文件：
+`plugins/kind/` 里有三个文件：
 
 | 文件 | 说明 |
 | --- | --- |
-| `head.onnx` | 12,489 B。`Gemm(transB=1)` → `Softmax`，输入 768 维 |
+| `head.onnx` | 12,249 B。`Gemm(transB=1)` → `Softmax`，输入 768 维 |
 | `labels.json` | 四个类名，顺序 = softmax 列顺序 |
-| `plugin.json` | 368 B：`kind: feature`、`target: tag`、`priority: 10`、`threshold: 0.5`、`input_dim: 768`、`exclusive: true`、`activation: softmax`、模型 `sha256` |
+| `plugin.json` | `kind: feature`、`target: tag`、`priority: 10`、`threshold: 0.5`、`input_dim: 768`、`exclusive: true`、`activation: softmax`、模型 `sha256` |
+
+`tests/test_shipped_plugins.py` 会核对 id/目录名、`labels.json` 与 manifest 一致、`sha256` 一致、
+ONNX 的输入宽度 = `input_dim`、输出宽度 = 标签数、softmax 每行和为 1——改了头忘了改 manifest 会直接红。
 
 这是普通 `feature` 插件，`plugins/` 下任何目录都会被自动加载；不需要改配置、不需要重发版。
 `target: tag` 的标签是**扁平叶子**（`插画` 一层，没有 `类型|` 前缀）；想让它落到树里，
@@ -172,9 +197,21 @@ tools\albumcat.cmd plan 你的图.jpg
 插件发出的普通标签**不占** `max_general_tags_per_image` 的名额，也仍然受 denylist 约束：
 25 个 WD14 标签不会把你自己的分类结果挤掉（`src/albumcat/rules.py` 第 4 段）。
 
+### 已经在手机上打过旧标签怎么办
+
+手机端保存标签用的是整行替换（`appTags.setTagsById`），所以：
+
+1. 把新头放进 `plugins/kind/`（仓库里已经是新的），重启 serve；
+2. 手机端进 `AI 打标签`，**取消**「跳过已经有标签的图片」，重跑一遍；
+3. 每张图打完的标签会**整行覆盖**，v1 留下的 `插画` 不会残留。
+
+只补跑一部分也行：跳过勾着，没标签的才跑，有旧标签的保持原样。
+
 ## 边界与后续
 
 - 四类互斥是**刻意**的：表情包常常是截图，梗图常常是插画加字，硬要四类各判一次只会互相矛盾。
 - 只在 640 px 缩略图上判据足够；`/plan` 收到什么就以什么为准（手机端上传 640–1024 px）。
-- 想加第五类（比如「游戏 3D 渲染」），建子目录重训即可；`labels.json` 和 `head.onnx` 会一起更新。
-- 头很小，多挂几个互斥头（画风、色情度、水印有无）成本可以忽略。
+- 想加第五类（比如「漫画分镜」和「动画截图」分开），建子目录重训即可；
+  `labels.json` 和 `head.onnx` 会一起更新。
+- 想要「梗图判定」再准一档，路是 **WD14 + CLIP 拼特征**（AUC 0.907）或者**用 OCR 的文字框面积/行数
+  当正交特征**，而不是继续在这个 768 维小头上调参。

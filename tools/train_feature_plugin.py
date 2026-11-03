@@ -367,6 +367,10 @@ def report_binary(
     if loss == "ce":
         is_pos = probs.argmax(axis=1) == index
         rule = "softmax winner"
+    elif probs.shape[1] == 1:
+        # a single sigmoid output: there is nothing to out-score
+        is_pos = probs[:, index] >= 0.5
+        rule = f"{positive} >= 0.5"
     else:
         is_pos = probs[:, index] >= np.delete(probs, index, axis=1).max(axis=1)
         rule = f"{positive} > every other label"

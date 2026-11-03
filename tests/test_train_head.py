@@ -165,6 +165,17 @@ class TestReport:
         )
         assert capsys.readouterr().out == ""
 
+    def test_a_single_sigmoid_column_reports_against_half(self, capsys) -> None:
+        # One label + background directories is how the meme head is trained;
+        # there is no second column to out-score, so the rule must be >= 0.5.
+        labels = ["梗图"]
+        Y = np.array([[1], [1], [0], [0]], dtype=np.float32)
+        probs = np.array([[0.9], [0.4], [0.6], [0.1]], dtype=np.float32)
+        trainer.report_binary(Y, probs, labels, "梗图")
+        out = capsys.readouterr().out
+        assert ">= 0.5" in out
+        assert "tp 1  fp 1  fn 1  tn 1" in out
+
 
 class TestLabelsJson:
     def test_labels_are_sorted_so_the_head_columns_are_stable(self) -> None:
