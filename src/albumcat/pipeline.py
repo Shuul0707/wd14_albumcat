@@ -164,6 +164,30 @@ class Pipeline:
         character_threshold: float | None = None,
     ) -> tuple[TagPlan, TagSet]:
         """Run one decoded image through the whole chain."""
+        plan, tagset, _item = self.inspect_image(
+            image,
+            asset_id=asset_id,
+            path=path,
+            threshold=threshold,
+            character_threshold=character_threshold,
+        )
+        return plan, tagset
+
+    def inspect_image(
+        self,
+        image: Image.Image,
+        *,
+        asset_id: str = "",
+        path: str = "",
+        threshold: float | None = None,
+        character_threshold: float | None = None,
+    ) -> tuple[TagPlan, TagSet, "ImageItem | None"]:
+        """Like :meth:`plan_image`, but also hand back the ``ImageItem``.
+
+        The item is what carries WD14's embedding, and therefore the only way to
+        ask a plugin for its *unfiltered* scores -- the phone never needs them,
+        the web UI (``/classify``) does. ``None`` when no plugin ran.
+        """
         result = self.tagger.interrogate(
             image,
             threshold=self.config.model.threshold if threshold is None else threshold,
@@ -175,6 +199,7 @@ class Pipeline:
         )
         tagset = tagresult_to_tagset(result)
 
+        item = None
         if self.registry.recognizers:
             item = ImageItem(
                 path=path,
@@ -185,7 +210,8 @@ class Pipeline:
             )
             tagset.update(self.registry.recognize(item))
 
-        return self.engine.evaluate(tagset, asset_id=asset_id, source_path=path), tagset
+        return self.engine.evaluate(tagset, asset_id=asset_id, source_path=path), tagset, item
+
 
     # ------------------------------------------------------------------ #
     def plan_paths(

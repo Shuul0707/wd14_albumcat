@@ -26,6 +26,8 @@ Endpoints
     POST /plan_batch  [{...}, ...] -> [{...}, ...]
     POST /encode_text  {"text": "沙滩"} -> one query vector
     POST /query     {"text": "黑暗的初音未来"} -> tags named + vector of the rest
+    GET  /ui        the web page for looking at the classifiers by hand
+    POST /classify  one image -> every class score, not just the winner
 
 Semantic search splits across the two machines on purpose: the PC runs the
 image tower once per photo (it is the expensive half) and hands the vector
@@ -78,6 +80,7 @@ from .semantic import (
 )
 from .tagdict import TagDictionary, load_dictionary
 from .tagfields import plan_to_tag_fields
+from .webui import INDEX_HTML
 
 __all__ = ["TaggingService", "serve"]
 
@@ -85,6 +88,9 @@ log = logging.getLogger("albumcat.server")
 
 PLAN_VERSION = 1
 MAX_BODY = 32 * 1024 * 1024  # a 448px thumbnail is ~50 KB; 32 MB is pure paranoia
+# the web UI batches drops; each image is ~100 KB of base64 after the browser
+# rescales it, so 24 per request is still far under MAX_BODY
+MAX_CLASSIFY_IMAGES = 24
 
 
 def _lan_ips() -> list[str]:
@@ -315,6 +321,65 @@ class TaggingService:
             result["ocr"] = ocr_block
         return result
 
+    def classify_bytes(self, data: bytes, *, asset_id: str = "", name: str = "") -> dict:
+        """One image, scored for a **human**: every class, not just the winner.
+
+        ``/plan`` deliberately answers only what the phone stores, and for an
+        exclusive head that is one word -- which makes "梗图被判成插画"
+        impossible to argue about from the phone's side. This is the same
+        pipeline with the threshold left off, so the runner-up is visible
+        (see ``/ui``).
+        """
+        from PIL import Image  # local import: keeps module import cheap
+
+        started = time.perf_counter()
+        try:
+            with Image.open(io.BytesIO(data)) as im:
+                im.load()
+                image = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+        except Exception as exc:  # noqa: BLE001 - any decode failure is a bad request
+            raise ValueError(f"cannot decode image: {type(exc).__name__}: {exc}") from exc
+
+        with self._lock:
+            plan, tagset, item = self.pipeline.inspect_image(image, asset_id=asset_id, path=name)
+
+        flat, hierarchical = plan_to_tag_fields(plan, self.config.publish)
+        classifiers: list[dict] = []
+        for recognizer in self.pipeline.registry.recognizers:
+            manifest = recognizer.manifest
+            if not manifest.labels or item is None:
+                continue
+            scores = recognizer.scores(item)
+            if not scores:
+                continue
+            best = max(scores, key=lambda pair: pair[1])
+            classifiers.append({
+                "id": manifest.id,
+                "name": manifest.name or manifest.id,
+                "exclusive": bool(getattr(recognizer, "exclusive", False)),
+                "threshold": manifest.threshold,
+                "labels": [label for label, _ in scores],
+                "scores": [round(score, 4) for _, score in scores],
+                "picked": best[0] if best[1] >= manifest.threshold else None,
+            })
+
+        return {
+            "ok": True,
+            "id": asset_id,
+            "name": name,
+            "ms": round((time.perf_counter() - started) * 1000, 1),
+            "classifiers": classifiers,
+            # the same lists the phone would store, trimmed for a small card
+            "tags": flat[:24],
+            "hierarchical": hierarchical[:6],
+            "characters": [
+                {"label": p.display, "score": round(p.score, 4)} for p in tagset.characters[:6]
+            ],
+            "rating": plan.star_rating if self.config.publish.write_star_rating else 0,
+            "needs_review": plan.needs_review,
+            "notes": list(plan.notes)[:6],
+        }
+
     # -- ocr --------------------------------------------------------------- #
 
     def _ocr_cached(self, digest: str, image) -> dict | None:
@@ -472,6 +537,17 @@ class _Handler(BaseHTTPRequestHandler):
     def _error(self, code: int, message: str, *, asset_id: str = "") -> None:
         self._send(code, {"ok": False, "id": asset_id, "error": message})
 
+    def _send_html(self, html: str) -> None:
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        # the page is one string in this process; a stale copy would drift from
+        # the code that served it, so never let the browser keep it
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _authed(self) -> bool:
         if not self.token:
             return True
@@ -508,11 +584,14 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/semantic/model":
             self._send_model()
             return
+        if path == "/ui":
+            self._send_html(INDEX_HTML)
+            return
         self._error(404, f"no such endpoint: {path}")
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
-        if path not in ("/plan", "/plan_batch", "/encode_text", "/query"):
+        if path not in ("/plan", "/plan_batch", "/encode_text", "/query", "/classify"):
             self._error(404, f"no such endpoint: {path}")
             return
         if not self._authed():
@@ -535,6 +614,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(200, self._handle_query(raw))
             elif path == "/plan":
                 self._send(200, self._handle_one(raw, ctype))
+            elif path == "/classify":
+                self._send(200, self._handle_classify(raw))
             else:
                 self._send(200, self._handle_batch(raw, ctype))
         except SemanticUnavailable as exc:
@@ -641,6 +722,49 @@ class _Handler(BaseHTTPRequestHandler):
             with_vector=bool(obj.get("vector", True)),
             dtype=(str(dtype) if dtype else None),
         )
+
+    def _handle_classify(self, raw: bytes) -> dict:
+        """POST /classify  {"images": [{"id", "name", "image"}, ...]}.
+
+        Always 200 with a per-image ``ok`` flag: the web page drops ten files at
+        once, and one corrupt GIF should not blank the whole grid.
+        """
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"bad JSON: {exc}") from exc
+
+        if isinstance(payload, list):
+            objects = payload
+        elif isinstance(payload, dict):
+            objects = payload.get("images") if "images" in payload else [payload]
+        else:
+            raise ValueError("expected an object with 'images' or a list")
+        if not isinstance(objects, list) or not objects:
+            raise ValueError("no images in request")
+        if len(objects) > MAX_CLASSIFY_IMAGES:
+            raise ValueError(f"at most {MAX_CLASSIFY_IMAGES} images per request")
+
+        items: list[dict] = []
+        for obj in objects:
+            if not isinstance(obj, dict):
+                raise ValueError("each image must be an object")
+            image = obj.get("image") or obj.get("data")
+            asset_id = str(obj.get("id") or "")
+            if not isinstance(image, str) or not image:
+                items.append({"ok": False, "id": asset_id, "error": "missing 'image' (base64)"})
+                continue
+            try:
+                items.append(
+                    self.service.classify_bytes(
+                        self._decode_b64(image),
+                        asset_id=asset_id,
+                        name=str(obj.get("name") or ""),
+                    )
+                )
+            except ValueError as exc:
+                items.append({"ok": False, "id": asset_id, "error": str(exc)})
+        return {"ok": True, "count": len(items), "items": items}
 
     def _handle_one(self, raw: bytes, ctype: str) -> dict:
         q = self._query()

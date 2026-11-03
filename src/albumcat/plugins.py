@@ -237,7 +237,27 @@ class _Base:
             raise PluginError(f"plugin {self.manifest.id} unavailable: {reason}")
         return list(self._predict(item))
 
+    def scores(self, item: ImageItem) -> list[tuple[str, float]]:
+        """Every score this recogniser computed, **before** the threshold.
+
+        The pipeline only ever needs the filtered answer, but a human looking at
+        a classifier needs the runner-up too: 「梗图 0.48 对 插画 0.51」 is a very
+        different situation from 「梗图 0.02」, and the phone's tag list collapses
+        both into the same single word. Recognisers with nothing to show return
+        an empty list.
+        """
+        ok, _reason = self.available()
+        if not ok:
+            return []
+        try:
+            return [(str(key), float(score)) for key, score in self._scores(item)]
+        except NotImplementedError:
+            return []
+
     def _predict(self, item: ImageItem) -> Iterable[Prediction]:
+        raise NotImplementedError
+
+    def _scores(self, item: ImageItem) -> Iterable[tuple[str, float]]:
         raise NotImplementedError
 
     # -- helpers ------------------------------------------------------- #
@@ -325,6 +345,10 @@ class OnnxHeadRecognizer(_Base):
         return True, ""
 
     def _predict(self, item: ImageItem) -> list[Prediction]:
+        scores = self._scores(item)
+        return self._predictions([key for key, _ in scores], [value for _, value in scores])
+
+    def _scores(self, item: ImageItem) -> list[tuple[str, float]]:
         if item.embedding is None:
             return []
         vector = np.asarray(item.embedding, dtype=np.float32).reshape(1, -1)
@@ -339,7 +363,7 @@ class OnnxHeadRecognizer(_Base):
                 f"{self.manifest.id}: head produced {len(raw)} scores for "
                 f"{len(self.labels)} labels"
             )
-        return self._predictions(self.labels, raw)
+        return [(label, float(score)) for label, score in zip(self.labels, raw)]
 
 
 class RemoteRecognizer(_Base):
