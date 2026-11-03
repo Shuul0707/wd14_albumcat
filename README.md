@@ -130,7 +130,7 @@ tools\albumcat.cmd plan samples\
 
 ### 2. 手机端
 
-1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.6.0 或更新**），
+1. 装 fork 版 Aves：去 [Releases](https://github.com/Shuul0707/wd14_albumcat/releases) 下 APK（一个包三种 ABI 的引擎，真机模拟器通用，**认准 v0.6.1 或更新**），
    或者按 [aves/FORK.md](aves/FORK.md) 自己构建；装好授权照片访问；
 2. 右上角 ✨ → **AI 打标签** → 填电脑地址 `http://192.168.1.10:8899` → **开始打标签**；
 3. 打完到 **Tags** 页，`角色|…` 会出现在那里。
