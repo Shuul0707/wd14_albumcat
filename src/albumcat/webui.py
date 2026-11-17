@@ -576,26 +576,30 @@ function isWrong(it) {
 // one truth row per class, plus the total: what the folder promised vs what came out
 function scoreRows() {
   const rows = new Map();
-  let n = 0, hit = 0, pending = 0, unknown = 0;
+  let n = 0, hit = 0, pending = 0, unknown = 0, abstained = 0;
   for (const it of items) {
     const real = truthOf(it);
     if (!real) { unknown++; continue; }
     if (!judged(it)) { pending++; continue; }
-    if (!rows.has(real)) rows.set(real, { truth: real, n: 0, hit: 0, wrong: new Map() });
+    if (!rows.has(real)) rows.set(real, { truth: real, n: 0, hit: 0, wrong: new Map(), abstained: 0 });
     const row = rows.get(real);
-    const got = verdict(it).key;
+    const v = verdict(it);
+    // 弃权不是判错。它明确说了「拿不准」；记进 wrong 会让「梗图→插画」这种真错误
+    // 和「不敢判」混成同一个数字，而两者要做的事完全不同：前者改模型，后者点一下。
+    if (v.key === NONE_LABEL) { abstained++; row.abstained++; continue; }
+    const got = v.key;
     row.n++; n++;
     if (got === real) { row.hit++; hit++; }
     else row.wrong.set(got, (row.wrong.get(got) || 0) + 1);
   }
-  return { rows, n, hit, pending, unknown };
+  return { rows, n, hit, pending, unknown, abstained };
 }
 
 function renderScore() {
   const el = $("score");
   el.textContent = "";
   if (!truth.available) { el.style.display = "none"; return; }
-  const { rows, n, hit, pending, unknown } = scoreRows();
+  const { rows, n, hit, pending, unknown, abstained } = scoreRows();
   if (!n && !pending) { el.style.display = "none"; return; }
   el.style.display = "block";
 
@@ -608,6 +612,7 @@ function renderScore() {
   const said = document.createElement("div");
   said.className = "sub";
   said.textContent = "准确度：判对 " + hit + " / " + n + " 张"
+    + (abstained ? " · 弃权 " + abstained + " 张（冠军没过阈值，不算判错，要人工确认）" : "")
     + (pending ? "（还有 " + pending + " 张没分类）" : "")
     + (unknown ? "，" + unknown + " 张没有标准答案" : "")
     + " · 标准答案来自服务端 --truth-dir";
@@ -648,6 +653,7 @@ function renderScore() {
     detail.className = "wrong";
     const rate = Math.round((row.hit / row.n) * 100);
     const parts = [row.hit + " 张判对 · " + rate + "%"];
+    if (row.abstained) parts.push("弃权 " + row.abstained);
     if (row.wrong.size) {
       const list = [];
       row.wrong.forEach((count, got) => list.push(got + " " + count));
