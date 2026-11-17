@@ -202,6 +202,7 @@ def train_head(
     seed: int,
     loss: str = "bce",
     class_weights: np.ndarray | None = None,
+    focal_gamma: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[float]]:
     """Logistic regression by Adam. Returns folded weights.
 
@@ -210,6 +211,12 @@ def train_head(
     exclusive (one image is exactly one of illustration/meme/photo/screenshot)
     and trains a softmax head instead, which is what a "what kind of picture is
     this" classifier wants: a softmax cannot say 插画 0.8 梗图 0.7 at once.
+
+    ``focal_gamma > 0`` switches the softmax branch to focal loss: the per-row
+    term becomes ``-(1-p_t)^gamma * log p_t``, which stops the thousands of easy
+    memes from drowning out the 80 screenshots. Gradient is derived by hand --
+    with ``coef = -(1-p_t)^gamma + gamma (1-p_t)^(gamma-1) p_t log p_t`` the
+    logit gradient is ``coef * (y - p)``; gamma=0 reduces to cross-entropy.
 
     Returns ``(W, b, mu, sd, loss_history)`` where ``logits = ((X-mu)/sd) @ W.T + b``.
     Standardising first is what makes a single learning rate work for every
@@ -248,8 +255,18 @@ def train_head(
             probs = exp / total
             row_weight = (Y * weights).sum(axis=1)  # weight of each row's class
             picked = np.clip((probs * Y).sum(axis=1), 1e-7, 1.0)
-            loss_value = float(-(row_weight * np.log(picked)).sum() / row_weight.sum())
-            grad_logits = (probs - Y) * (row_weight / row_weight.sum())[:, None]
+            if focal_gamma > 0:
+                # Clip (1-p_t) away from 0: at gamma < 1 its derivative carries a
+                # (1-p_t)^(gamma-1) factor that diverges as p_t -> 1, which is
+                # exactly the easy sample focal loss is meant to damp.
+                one_minus = np.clip(1.0 - picked, 1e-7, 1.0)
+                mod = one_minus ** focal_gamma
+                loss_value = float(-(row_weight * mod * np.log(picked)).sum() / row_weight.sum())
+                coef = -mod + focal_gamma * (one_minus ** (focal_gamma - 1.0)) * picked * np.log(picked)
+                grad_logits = (probs - Y) * (-coef * row_weight / row_weight.sum())[:, None]
+            else:
+                loss_value = float(-(row_weight * np.log(picked)).sum() / row_weight.sum())
+                grad_logits = (probs - Y) * (row_weight / row_weight.sum())[:, None]
         else:
             probs = 1.0 / (1.0 + np.exp(-logits))
             # BCE with a small floor/ceiling so log() never sees 0.
@@ -466,6 +483,14 @@ def main(argv: list[str] | None = None) -> int:
         help="with --loss ce, weight rare classes up so a small class is not ignored",
     )
     ap.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=0.0,
+        help="with --loss ce, focal-loss gamma: >0 damps easy samples so a tiny "
+             "class (e.g. 80 screenshots against 3.7k memes) still shapes the "
+             "decision boundary. 2.0 is the RetinaNet default; try 0.5-2.0.",
+    )
+    ap.add_argument(
         "--binary-label",
         default=None,
         help="also report this label as positive vs all the others (e.g. illustration)",
@@ -537,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\ntraining on {len(train_idx)} image(s), validating on {len(val_idx)}")
     W, b, _mu, _sd, history = train_head(
         X[train_idx], Y[train_idx], args.epochs, args.lr, args.l2, args.seed,
-        loss=args.loss, class_weights=weights,
+        loss=args.loss, class_weights=weights, focal_gamma=args.focal_gamma,
     )
     print("  loss: " + " -> ".join(f"{v:.4f}" for v in history))
 
