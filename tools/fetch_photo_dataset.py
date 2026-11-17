@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import argparse
 import io
+import struct
 import json
 import sys
 import urllib.request
 import zipfile
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -40,19 +42,87 @@ DEFAULT_CATEGORIES = (
 )
 
 
+def fetch_member_from_remote_zip(url: str, member: str, dest: Path) -> Path:
+    """只下载远程 zip 里指定的那个文件，不整包下。
+
+    ``annotations_trainval2017.zip`` 是 241 MB，其中 ``instances_val2017.json``
+    一个文件就占大头，另外还有 captions/ 和 person_keypoints/ 两套我们用不到的。
+    走 Range 把 zip 切开：先读尾部找到中央目录，再按偏移只取目标文件那一段。
+    实测省掉约 200 MB 流量。
+    """
+
+    def ranged(start: int, end: int) -> bytes:
+        """取一段字节。大于 1 MB 的请求会打印进度——慢链路上几 MB 也要几分钟，
+        没有输出的话跟卡死没区别。"""
+        want = end - start + 1
+        req = urllib.request.Request(url, headers={
+            "Range": f"bytes={start}-{end}",
+            "User-Agent": "albumcat-fetch/1.0",
+        })
+        with urllib.request.urlopen(req, timeout=300) as r:
+            if want <= 1024 * 1024:
+                return r.read()
+            buf = bytearray()
+            while len(buf) < want:
+                chunk = r.read(min(1 << 16, want - len(buf)))
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) % (1 << 20) < (1 << 16):
+                    print(f"\r  {len(buf) / 1048576:.1f} / {want / 1048576:.1f} MB", end="", flush=True)
+            print()
+            return bytes(buf)
+
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "albumcat-fetch/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        total = int(r.headers["Content-Length"])
+
+    # EOCD 最长 22 + 65535 字节注释
+    tail_len = min(65557, total)
+    tail = ranged(total - tail_len, total - 1)
+    eocd = tail.rfind(b"PK\x05\x06")
+    if eocd < 0:
+        raise SystemExit("zip 尾部没有 EOCD，可能不是标准 zip")
+    cd_size = struct.unpack("<I", tail[eocd + 12:eocd + 16])[0]
+    cd_offset = struct.unpack("<I", tail[eocd + 16:eocd + 20])[0]
+
+    cd = ranged(cd_offset, cd_offset + cd_size - 1)
+    pos = 0
+    wanted = member.replace("\\", "/")
+    while pos < len(cd) - 4:
+        if cd[pos:pos + 4] != b"PK\x01\x02":
+            break
+        comp_size, uncomp_size = struct.unpack("<II", cd[pos + 20:pos + 28])
+        name_len, extra_len, comment_len = struct.unpack("<HHH", cd[pos + 28:pos + 34])
+        local_offset = struct.unpack("<I", cd[pos + 42:pos + 46])[0]
+        name = cd[pos + 46:pos + 46 + name_len].decode("utf-8", "replace")
+        if name == wanted:
+            header = ranged(local_offset, local_offset + 29)
+            l_name_len, l_extra_len = struct.unpack("<HH", header[26:30])
+            data_start = local_offset + 30 + l_name_len + l_extra_len
+            print(f"  只取 {member}：压缩 {comp_size / 1048576:.1f} MB / 解压 {uncomp_size / 1048576:.1f} MB")
+            raw = ranged(data_start, data_start + comp_size - 1)
+            blob = zlib.decompress(raw, -15) if comp_size != uncomp_size else raw
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(blob)
+            if len(blob) != uncomp_size:
+                raise SystemExit(f"解压后大小不符：{len(blob)} != {uncomp_size}")
+            return dest
+        pos += 46 + name_len + extra_len + comment_len
+    raise SystemExit(f"zip 里没有 {member}")
+
+
 def ensure_annotations(cache: Path) -> Path:
-    """返回 instances_val2017.json 的路径，需要时先下一遍。"""
+    """返回 instances_val2017.json 的路径。
+
+    不再整包下 241 MB：走 Range 只取 zip 里的那一个成员。
+    """
     target = cache / "instances_val2017.json"
-    if target.exists():
+    if target.exists() and target.stat().st_size > 30 * 1024 * 1024:
         return target
     cache.mkdir(parents=True, exist_ok=True)
-    print(f"下载标注（约 36 MB，只需一次）→ {ANNOTATIONS_URL}")
-    with urllib.request.urlopen(ANNOTATIONS_URL, timeout=300) as r:
-        blob = r.read()
-    print(f"  收到 {len(blob) / 1024 / 1024:.0f} MB，解压 {ANN_MEMBER}")
-    with zipfile.ZipFile(io.BytesIO(blob)) as z:
-        with z.open(ANN_MEMBER) as src:
-            target.write_bytes(src.read())
+    print(f"从远程 zip 单独取 {ANN_MEMBER}")
+    fetch_member_from_remote_zip(ANNOTATIONS_URL, ANN_MEMBER, target)
     print(f"  标注就位：{target}  {target.stat().st_size / 1024 / 1024:.0f} MB")
     return target
 
