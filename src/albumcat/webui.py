@@ -70,6 +70,11 @@ INDEX_HTML = r"""<!doctype html>
   button.primary { background: #1d2b47; border-color: #365b9e; font-weight: 600; }
   button.primary:hover:not(:disabled) { border-color: var(--accent); background: #223353; }
   button.on { border-color: var(--accent); background: #1b2333; }
+label.th { display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
+  color: var(--text-dim); white-space: nowrap; }
+label.th input[type=range] { width: 120px; accent-color: var(--accent); }
+label.th b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text); min-width: 34px; }
   input[type=password] {
     background: var(--panel-2); color: var(--text);
     border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font: inherit; width: 140px;
@@ -231,6 +236,11 @@ INDEX_HTML = r"""<!doctype html>
 <div class="bar">
   <button class="primary" id="run">开始分类</button>
   <button id="stop" disabled>停止</button>
+  <label class="th">阈值
+    <input id="thSlider" type="range" min="0.30" max="0.90" step="0.05" value="0.60"
+           oninput="onThInput(this)">
+    <b id="thValue">0.60</b>
+  </label>
   <button id="pickDir">选文件夹</button>
   <button id="pickFiles">选图片</button>
   <div class="progress">
@@ -531,11 +541,27 @@ function winner(result) {
   return { cl, index: best, label: cl.labels[best], score: cl.scores[best] };
 }
 
+// 滑块是纯前端模拟：/classify 早把每一类的分数全传过来了，拖滑块不用重新请求，
+// 只是换一个数去比。演示时可以现场把 0.5 拖到 0.6，看着「敢判的变少、判对的
+// 变多」，不用重启服务。
+function liveThreshold(cl) {
+  const el = $("thSlider");
+  return el ? parseFloat(el.value) : cl.threshold;
+}
+
+function onThInput(el) {
+  const v = parseFloat(el.value).toFixed(2);
+  const out = document.getElementById("thValue");
+  if (out) out.textContent = v;
+  renderScore();
+  if (typeof renderGrid === "function") renderGrid();
+}
+
 function verdict(it) {
   if (it.state === "error") return { key: NONE_LABEL, label: "读不了", score: null, win: null };
   const win = winner(it.result);
   if (!win) return { key: NONE_LABEL, label: "未识别", score: null, win: null };
-  if (win.score >= win.cl.threshold) return { key: win.label, label: win.label, score: win.score, win };
+  if (win.score >= liveThreshold(win.cl)) return { key: win.label, label: win.label, score: win.score, win };
   return { key: NONE_LABEL, label: "弃权", score: win.score, win };
 }
 
@@ -923,8 +949,8 @@ function openDetail(it) {
     const meta = document.createElement("div");
     meta.className = "meta";
     const left = document.createElement("span");
-    left.textContent = cl.id + " · 阈值 " + cl.threshold.toFixed(2)
-      + (win.score >= cl.threshold ? "" : " · 冠军没过阈值，弃权")
+    left.textContent = cl.id + " · 阈值 " + liveThreshold(cl).toFixed(2)
+      + (win.score >= liveThreshold(cl) ? "" : " · 冠军没过阈值，弃权")
       + (it.result.ms ? " · " + it.result.ms + " ms" : "");
     meta.appendChild(left);
     bars.appendChild(meta);
