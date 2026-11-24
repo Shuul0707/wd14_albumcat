@@ -160,3 +160,75 @@ def test_a_recognizer_that_never_loaded_reports_no_scores():
     plugin.keys = ["插画"]
     plugin.values = [0.9]
     assert plugin.scores(None) == [], "not loaded yet: nothing to show"
+
+# --------------------------------------------------------------------------- #
+# fused input: WD14 embedding + Chinese-CLIP vector
+# --------------------------------------------------------------------------- #
+import numpy as np  # noqa: E402
+
+from albumcat.plugins import ImageItem  # noqa: E402
+
+
+def fused(semantic_dim: int = 3):
+    manifest = PluginManifest.from_dict(
+        {
+            "id": "t",
+            "kind": "feature",
+            "target": GENERAL,
+            "input_dim": 5 + semantic_dim,
+            "semantic_dim": semantic_dim,
+        }
+    )
+    return _Base(manifest, RecognizerContext(plugin_dir=Path(".")))
+
+
+def test_semantic_dim_is_a_real_manifest_field():
+    plugin = fused(512)
+    assert plugin.manifest.semantic_dim == 512
+    assert plugin.semantic_dim == 512
+    assert fused(0).semantic_dim == 0
+
+
+def test_a_plain_head_never_touches_the_clip_vector():
+    item = ImageItem(embedding=np.ones(5, dtype=np.float32), semantic=np.zeros(3))
+    vector = fused(0)._input_vector(item)
+    assert vector.shape == (1, 5)
+
+
+def test_a_fused_head_stacks_wd14_then_clip():
+    item = ImageItem(
+        embedding=np.full(5, 2.0, dtype=np.float32),
+        semantic=np.full(3, 7.0, dtype=np.float32),
+    )
+    vector = fused(3)._input_vector(item)
+    assert vector.shape == (1, 8)
+    assert vector[0, :5].tolist() == [2.0] * 5
+    assert vector[0, 5:].tolist() == [7.0] * 3
+
+
+def test_a_fused_head_abstains_when_the_clip_vector_is_missing():
+    # Better no picture-type label than one computed from zeroed features.
+    item = ImageItem(embedding=np.ones(5, dtype=np.float32))
+    assert fused(3)._input_vector(item) is None
+
+
+def test_a_fused_head_refuses_a_clip_vector_of_the_wrong_width():
+    from albumcat.plugins import PluginError
+
+    item = ImageItem(embedding=np.ones(5, dtype=np.float32), semantic=np.ones(2, dtype=np.float32))
+    with pytest.raises(PluginError, match="semantic_dim 3 but the CLIP vector is 2-d"):
+        fused(3)._input_vector(item)
+
+
+def test_no_embedding_means_no_input_either_way():
+    assert fused(3)._input_vector(ImageItem(semantic=np.ones(3))) is None
+
+
+def test_the_registry_knows_a_head_wants_clip():
+    from albumcat.plugins import PluginRegistry
+
+    registry = PluginRegistry(Path("."))
+    registry.recognizers = [fused(0)]
+    assert registry.needs_semantic is False
+    registry.recognizers = [fused(0), fused(3)]
+    assert registry.needs_semantic is True

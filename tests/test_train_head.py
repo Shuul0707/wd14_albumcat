@@ -134,6 +134,15 @@ class TestEmbeddingCache:
     def test_a_missing_file_does_not_raise(self, tmp_path: Path) -> None:
         assert trainer.embedding_fingerprint([(tmp_path / "gone.jpg", ["甲"])], None)
 
+    def test_a_fused_cache_is_not_the_wd14_cache(self, tmp_path: Path) -> None:
+        # 1,280-d rows must never be served out of a 768-d cache, or the head is
+        # trained on half its input and the truncation is silent.
+        image = self.make_image(tmp_path / "a.jpg", b"bytes")
+        plain = trainer.embedding_fingerprint([(image, ["甲"])], None)
+        fused = trainer.embedding_fingerprint([(image, ["甲"])], None, semantic=True)
+        assert fused != plain
+        assert trainer.embedding_fingerprint([(image, ["甲"])], None, semantic=True) == fused
+
 
 class TestReport:
     def test_binary_report_reads_the_softmax_winner(self, capsys) -> None:
@@ -184,3 +193,97 @@ class TestLabelsJson:
         labels = sorted({"meme", "illustration", "photo"})
         assert labels == ["illustration", "meme", "photo"]
         assert json.loads(json.dumps(labels)) == labels
+
+
+class TestManifestRows:
+    def write(self, tmp_path: Path, rows: list[dict]) -> Path:
+        path = tmp_path / "manifest.jsonl"
+        path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+        return path
+
+    def test_split_and_source_survive_the_round_trip(self, tmp_path: Path) -> None:
+        path = self.write(tmp_path, [
+            {"path": "a.jpg", "label": "插画", "split": "train", "source": "coco"},
+            {"path": "b.jpg", "labels": ["梗图"], "split": "val", "source": "met-meme"},
+        ])
+        rows = trainer.read_jsonl_rows(path)
+        assert [row["labels"] for row in rows] == [["插画"], ["梗图"]]
+        assert [row["split"] for row in rows] == ["train", "val"]
+        assert [row["source"] for row in rows] == ["coco", "met-meme"]
+
+    def test_a_plain_manifest_still_works(self, tmp_path: Path) -> None:
+        # the old {path, labels} form has no split; main() falls back to a slice
+        path = self.write(tmp_path, [{"path": "a.jpg", "labels": ["插画"]}])
+        rows = trainer.read_jsonl_rows(path)
+        assert rows[0]["split"] == ""
+        assert rows[0]["source"] == ""
+
+
+class TestConfusion:
+    def test_the_column_that_ate_a_class_is_visible(self, capsys) -> None:
+        labels = ["插画", "梗图"]
+        # two illustrations, one called a meme: the 梗图 column must say 1
+        Y = np.array([[1, 0], [1, 0], [0, 1]], dtype=np.float32)
+        probs = np.array([[0.9, 0.1], [0.2, 0.8], [0.1, 0.9]], dtype=np.float32)
+        trainer.confusion(Y, probs, labels, 0.5)
+        out = capsys.readouterr().out
+        assert "truth \\ guess" in out
+        assert "插画" in out and "50.0% of 2" in out
+        assert "100.0% of 1" in out
+
+    def test_an_unsure_winner_lands_in_the_dash_column(self, capsys) -> None:
+        labels = ["插画", "梗图"]
+        Y = np.array([[1, 0]], dtype=np.float32)
+        probs = np.array([[0.45, 0.55]], dtype=np.float32)
+        trainer.confusion(Y, probs, labels, 0.6)
+        out = capsys.readouterr().out
+        assert "0.0% of 1" in out
+
+
+class TestReportBySource:
+    def test_one_bad_source_cannot_hide_in_the_average(self, capsys) -> None:
+        labels = ["插画", "梗图"]
+        Y = np.array([[1, 0], [1, 0], [0, 1], [0, 1]], dtype=np.float32)
+        probs = np.array([[0.9, 0.1], [0.9, 0.1], [0.2, 0.8], [0.7, 0.3]],
+                         dtype=np.float32)
+        trainer.report_by_source(Y, probs, labels, ["coco", "coco", "met-meme", "met-meme"])
+        out = capsys.readouterr().out
+        assert "coco" in out and "100.0%" in out
+        assert "met-meme" in out and "50.0%" in out
+
+    def test_no_source_column_prints_nothing(self, capsys) -> None:
+        labels = ["插画", "梗图"]
+        Y = np.array([[1, 0]], dtype=np.float32)
+        probs = np.array([[0.9, 0.1]], dtype=np.float32)
+        trainer.report_by_source(Y, probs, labels, ["", ""])
+        assert capsys.readouterr().out == ""
+
+
+class TestManifestMerge:
+    """A retrain replaces the head, not the hand-tuned post-processing."""
+
+    def test_the_size_prior_survives_a_retrain(self) -> None:
+        fresh = {"id": "kind", "input_dim": 1280}
+        previous = {
+            "id": "kind",
+            "input_dim": 768,
+            "size_prior": {"label": "梗图", "small_edge": 640},
+        }
+        merged = trainer.merge_manifest(fresh, previous)
+        assert merged["input_dim"] == 1280, "the fresh export must win on shape"
+        assert merged["size_prior"]["small_edge"] == 640
+
+    def test_the_version_bumps_instead_of_resetting(self) -> None:
+        merged = trainer.merge_manifest({"id": "kind"}, {"version": "4"})
+        assert merged["version"] == "5"
+
+    def test_a_missing_or_broken_manifest_is_not_fatal(self, tmp_path: Path) -> None:
+        assert trainer.read_manifest(tmp_path / "nope.json") == {}
+        broken = tmp_path / "plugin.json"
+        broken.write_text("{not json", encoding="utf-8")
+        assert trainer.read_manifest(broken) == {}
+        merged = trainer.merge_manifest({"id": "kind"}, {})
+        assert merged["version"] == "1"
+
+    def test_a_folder_without_a_manifest_keeps_the_fresh_block(self) -> None:
+        assert trainer.merge_manifest({"id": "kind"}, {})["id"] == "kind"

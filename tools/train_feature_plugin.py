@@ -78,8 +78,15 @@ def collect_from_dirs(root: Path) -> list[tuple[Path, list[str]]]:
     return rows
 
 
-def collect_from_jsonl(path: Path) -> list[tuple[Path, list[str]]]:
-    rows: list[tuple[Path, list[str]]] = []
+def read_jsonl_rows(path: Path) -> list[dict]:
+    """Parse a JSONL manifest into ``{path, labels, split, source}`` dicts.
+
+    ``split`` ("train"/"val") is optional; when every row carries one the split is
+    taken from the file instead of a random slice, which is the only way to keep
+    augmented copies out of the validation set.  ``source`` is optional too and is
+    only used to print per-source accuracy.
+    """
+    rows: list[dict] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
@@ -88,22 +95,63 @@ def collect_from_jsonl(path: Path) -> list[tuple[Path, list[str]]]:
             obj = json.loads(line)
         except json.JSONDecodeError as exc:
             raise SystemExit(f"{path}:{line_no}: not valid JSON -- {exc}") from exc
-        image = Path(obj["path"])
         labels = obj.get("labels") or ([obj["label"]] if obj.get("label") else [])
-        rows.append((image, list(labels)))
+        rows.append({
+            "path": Path(obj["path"]),
+            "labels": [str(label) for label in labels],
+            "split": str(obj.get("split") or ""),
+            "source": str(obj.get("source") or ""),
+        })
     return rows
 
 
-def embedding_fingerprint(rows: list[tuple[Path, list[str]]], config_path: str | None) -> str:
+def collect_from_jsonl(path: Path) -> list[tuple[Path, list[str]]]:
+    return [(row["path"], list(row["labels"])) for row in read_jsonl_rows(path)]
+
+
+#: Manifest keys a retrain must not drop. They are hand-tuned or hand-written and
+#: the exporter cannot recompute them; `size_prior` in particular used to vanish
+#: on every retrain, silently costing ~2 points of real-world accuracy.
+CARRIED_KEYS = ("size_prior", "author", "homepage")
+
+
+def read_manifest(path: Path) -> dict:
+    """The existing manifest, or ``{}`` -- a half-written file is not fatal."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def merge_manifest(fresh: dict, previous: dict) -> dict:
+    """Fresh export wins, except for keys the trainer has no opinion about."""
+    merged = dict(fresh)
+    for key in CARRIED_KEYS:
+        if key in previous and key not in merged:
+            merged[key] = previous[key]
+    try:
+        merged["version"] = str(int(previous.get("version", "0")) + 1)
+    except (TypeError, ValueError):
+        pass
+    return merged
+
+
+def embedding_fingerprint(rows: list[tuple[Path, list[str]]], config_path: str | None,
+                          semantic: bool = False) -> str:
     """A cheap identity for "the same images, in the same order, same model".
 
     Size plus mtime catches the "I added/removed/replaced files" case; the
     head/tail digest catches an in-place edit when the filesystem's mtime
     granularity is coarser than the edit (it is, on Windows, for a rewrite of the
     same length in the same tick).
+
+    ``semantic`` is part of the identity: a WD14-only cache must never be reused
+    for a fused run, or the head would be trained on half its input.
     """
     digest = hashlib.sha256()
     digest.update(str(config_path or "").encode("utf-8"))
+    digest.update(b"semantic" if semantic else b"wd14")
     for path, labels in rows:
         digest.update(str(path).encode("utf-8"))
         digest.update(",".join(labels).encode("utf-8"))
@@ -122,7 +170,7 @@ def embedding_fingerprint(rows: list[tuple[Path, list[str]]], config_path: str |
 
 
 def load_embeddings(path: Path, fingerprint: str):
-    """Return ``(X, Y, labels)`` from a cache made for these exact images."""
+    """Return ``(X, Y, labels, kept)`` from a cache made for these exact images."""
     if not path.exists():
         return None
     try:
@@ -131,13 +179,17 @@ def load_embeddings(path: Path, fingerprint: str):
                 print(f"  cache {path} is stale (images changed), embedding again")
                 return None
             labels = json.loads(str(data["labels"]))
-            return data["X"], data["Y"], list(labels)
+            X, Y = data["X"], data["Y"]
+            kept = ([int(value) for value in data["kept"]]
+                    if "kept" in data.files else list(range(len(X))))
+            return X, Y, list(labels), kept
     except (OSError, KeyError, ValueError) as exc:
         print(f"  cache {path} unusable ({type(exc).__name__}: {exc})")
         return None
 
 
-def save_embeddings(path: Path, fingerprint: str, X, Y, labels: list[str]) -> None:
+def save_embeddings(path: Path, fingerprint: str, X, Y, labels: list[str],
+                    kept: list[int] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         path,
@@ -145,16 +197,40 @@ def save_embeddings(path: Path, fingerprint: str, X, Y, labels: list[str]) -> No
         Y=Y.astype(np.float32),
         labels=np.asarray(json.dumps(labels, ensure_ascii=False)),
         fingerprint=np.asarray(fingerprint),
+        kept=np.asarray(kept if kept is not None else range(len(X)), dtype=np.int64),
     )
     print(f"  cached embeddings -> {path}")
 
 
-def embed_all(rows: list[tuple[Path, list[str]]], config_path: str | None):
-    """Run every image through WD14 and return (X, labels-per-row, known labels)."""
+def embed_all(rows: list[tuple[Path, list[str]]], config_path: str | None,
+              semantic: bool = False):
+    """Run every image through WD14 and return (X, Y, labels, kept row indices).
+
+    A corrupt file is skipped rather than fatal, so the caller needs ``kept`` to
+    keep any per-row metadata (split, source) lined up with the matrix rows.
+
+    With ``semantic`` the Chinese-CLIP image vector (512-d) is appended to WD14's
+    768 features, giving a 1,280-d input. That fusion was the only change that
+    beat every single-feature variant (AUC .855 -> .907): WD14 knows "texture,
+    strokes, ink"; CLIP knows "this looks like a photograph of a beach".
+    """
     from albumcat.config import Config
     from albumcat.pipeline import Pipeline
 
-    pipe = Pipeline(Config.load(config_path))
+    config = Config.load(config_path)
+    encoder = None
+    if semantic:
+        from albumcat.semantic import SemanticEncoder
+
+        encoder = SemanticEncoder(config.semantic)
+        if not encoder.available:
+            raise SystemExit(
+                "semantic encoding was requested but Chinese-CLIP is not available "
+                f"(reason: {encoder.info().reason or 'unknown'}) -- run `albumcat doctor`"
+            )
+        print(f"  fusing WD14 features with {config.semantic.model_id} "
+              f"({config.semantic.dim}-d)")
+    pipe = Pipeline(config, semantic=encoder)
     tagger = pipe.tagger
     if tagger.embedding_dim is None:
         raise SystemExit(
@@ -168,17 +244,34 @@ def embed_all(rows: list[tuple[Path, list[str]]], config_path: str | None):
 
     vectors: list[np.ndarray] = []
     targets: list[np.ndarray] = []
+    kept: list[int] = []
     skipped = 0
     for index, (path, row_labels) in enumerate(rows, 1):
         try:
-            result = tagger.interrogate_path(path)
+            if semantic:
+                from PIL import Image, ImageOps
+
+                with Image.open(path) as raw:
+                    image = ImageOps.exif_transpose(raw).convert("RGB")
+                result = tagger.interrogate(image)
+            else:
+                result = tagger.interrogate_path(path)
         except Exception as exc:  # unreadable/corrupt file should not kill a run
             print(f"  ! {path.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
             skipped += 1
             continue
         if result.embedding is None:
             raise SystemExit("tagger produced no embedding mid-run; aborting")
-        vectors.append(np.asarray(result.embedding, dtype=np.float32))
+        parts = [np.asarray(result.embedding, dtype=np.float32)]
+        if semantic:
+            try:
+                parts.append(np.asarray(encoder.encode_image(image), dtype=np.float32))
+            except Exception as exc:  # noqa: BLE001 - skip the row, keep the run
+                print(f"  ! {path.name}: clip {type(exc).__name__}: {exc}", file=sys.stderr)
+                skipped += 1
+                continue
+        vectors.append(np.concatenate(parts))
+        kept.append(index - 1)
         target = np.zeros(len(labels), dtype=np.float32)
         for label in row_labels:
             target[labels.index(label)] = 1.0
@@ -187,7 +280,7 @@ def embed_all(rows: list[tuple[Path, list[str]]], config_path: str | None):
             print(f"  embedded {index}/{len(rows)}")
 
     print(f"  embedded {len(vectors)} image(s), skipped {skipped}")
-    return np.stack(vectors), np.stack(targets), labels
+    return np.stack(vectors), np.stack(targets), labels, kept
 
 
 # --------------------------------------------------------------------------- #
@@ -388,6 +481,64 @@ def report_binary(
     print(f"    confusion  tp {tp}  fp {fp}  fn {fn}  tn {tn}")
 
 
+def confusion(
+    Y: np.ndarray,
+    probs: np.ndarray,
+    labels: list[str],
+    threshold: float = 0.0,
+) -> None:
+    """Rows are the truth, columns the winner; ``-`` is "no label won".
+
+    A precision/recall table hides which class absorbs which; when the question is
+    "why does 照片 only hit 53%", the column that ate it is the answer.
+    """
+    winner = probs.argmax(axis=1)
+    sure = probs.max(axis=1) >= threshold
+    truth = Y >= 0.5
+    columns = list(labels) + ["-"]
+    counts = {row: {col: 0 for col in columns} for row in labels}
+    for index in range(len(Y)):
+        true_labels = [labels[i] for i in np.flatnonzero(truth[index])]
+        guess = labels[winner[index]] if sure[index] else "-"
+        for true_label in true_labels or ["-"]:
+            if true_label in counts:
+                counts[true_label][guess] = counts[true_label].get(guess, 0) + 1
+    width = max(len(col) for col in columns)
+    width = max(width, 4)
+    print(f"\n  truth \\ guess  " + " ".join(f"{col:>{width}s}" for col in columns))
+    for row in labels:
+        cells = " ".join(f"{counts[row].get(col, 0):>{width}d}" for col in columns)
+        total = sum(counts[row].values())
+        hit = counts[row].get(row, 0)
+        share = f"{hit / total * 100:4.1f}%" if total else "   - "
+        print(f"  {row[:14]:14s} " + cells + f"   {share} of {total}")
+
+
+def report_by_source(
+    Y: np.ndarray,
+    probs: np.ndarray,
+    labels: list[str],
+    sources: list[str],
+) -> None:
+    """Exact-match per data source: a new source that scores 50% is a warning.
+
+    Pooling every source into one accuracy hides a head that simply learned the
+    biggest source; this line is what catches it.
+    """
+    if not any(sources):
+        return
+    winner = probs.argmax(axis=1)
+    truth_index = Y.argmax(axis=1)
+    buckets: dict[str, list[int]] = {}
+    for index, source in enumerate(sources):
+        buckets.setdefault(source or "?", []).append(index)
+    print("\n  exact-match by source")
+    for source in sorted(buckets):
+        rows = np.asarray(buckets[source])
+        hit = float((winner[rows] == truth_index[rows]).mean())
+        print(f"    {source[:24]:24s} {len(rows):5d} image(s)   {hit * 100:5.1f}%")
+
+
 # --------------------------------------------------------------------------- #
 # export
 # --------------------------------------------------------------------------- #
@@ -482,6 +633,12 @@ def main(argv: list[str] | None = None) -> int:
         default="character",
         help="which bucket the head's labels land in (default: character)",
     )
+    ap.add_argument(
+        "--semantic",
+        action="store_true",
+        help="stack the Chinese-CLIP image vector (512-d) onto WD14's features; "
+             "needs the semantic towers, and the head then only runs where they load",
+    )
     ap.add_argument("--force", action="store_true", help="overwrite an existing --out")
     args = ap.parse_args(argv)
 
@@ -490,9 +647,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{out} already exists and is not empty (use --force)", file=sys.stderr)
         return 2
     plugin_id = args.id or out.name
+    semantic_dim = 0
+    if args.semantic:
+        from albumcat.config import Config
+
+        semantic_dim = int(Config.load(args.config).semantic.dim)
 
     print(f"collecting images for plugin {plugin_id!r}")
     rows = collect_from_dirs(args.data) if args.data else collect_from_jsonl(args.jsonl)
+    meta = read_jsonl_rows(args.jsonl) if args.jsonl else []
     if len(rows) < 4:
         print(f"only {len(rows)} image(s); a head needs more than that", file=sys.stderr)
     if args.loss == "ce":
@@ -505,18 +668,27 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
+    kept = list(range(len(rows)))
     cached = None
     if args.cache:
-        fingerprint = embedding_fingerprint(rows, args.config)
+        fingerprint = embedding_fingerprint(rows, args.config, args.semantic)
         cached = load_embeddings(args.cache, fingerprint)
     if cached:
-        X, Y, labels = cached
+        X, Y, labels, kept = cached
         print(f"  matrix: {X.shape}, {len(labels)} label(s): {', '.join(labels)}  (from cache)")
     else:
-        X, Y, labels = embed_all(rows, args.config)
+        X, Y, labels, kept = embed_all(rows, args.config, args.semantic)
         print(f"  matrix: {X.shape}, {len(labels)} label(s): {', '.join(labels)}")
+        if args.semantic and semantic_dim and X.shape[1] <= semantic_dim:
+            print(f"the fused matrix is only {X.shape[1]}-d for a {semantic_dim}-d CLIP half",
+                  file=sys.stderr)
+            return 2
         if args.cache:
-            save_embeddings(args.cache, embedding_fingerprint(rows, args.config), X, Y, labels)
+            save_embeddings(args.cache, embedding_fingerprint(rows, args.config, args.semantic),
+                            X, Y, labels, kept)
+
+    sources = [meta[i]["source"] if i < len(meta) else "" for i in kept]
+    splits = [meta[i]["split"] if i < len(meta) else "" for i in kept]
 
     weights = None
     if args.class_weight:
@@ -526,13 +698,25 @@ def main(argv: list[str] | None = None) -> int:
             f"{label}={weight:.2f}" for label, weight in zip(labels, weights)
         ))
 
-    # Stratified-ish split: shuffle, then slice. Per-label stratification is
-    # overkill at these sizes and complicates the background rows.
-    rng = random.Random(args.seed)
-    order = list(range(len(X)))
-    rng.shuffle(order)
-    n_val = max(1, int(len(order) * args.val_frac)) if len(order) >= 5 else 0
-    val_idx, train_idx = order[:n_val], order[n_val:]
+    # Splits: a JSONL manifest that names every row's split wins, because that is
+    # the only way to guarantee augmented copies stay out of validation. Otherwise
+    # it is a plain shuffle-then-slice.
+    if splits and all(value in ("train", "val") for value in splits):
+        train_idx = [i for i, value in enumerate(splits) if value == "train"]
+        val_idx = [i for i, value in enumerate(splits) if value == "val"]
+        n_val = len(val_idx)
+        print(f"  split from the manifest: {len(train_idx)} train / {n_val} val")
+        if not train_idx or not val_idx:
+            print("the manifest must contain both a train and a val row", file=sys.stderr)
+            return 2
+    else:
+        if splits and any(splits):
+            print("  ! some rows have no split; falling back to a random slice")
+        rng = random.Random(args.seed)
+        order = list(range(len(X)))
+        rng.shuffle(order)
+        n_val = max(1, int(len(order) * args.val_frac)) if len(order) >= 5 else 0
+        val_idx, train_idx = order[:n_val], order[n_val:]
 
     print(f"\ntraining on {len(train_idx)} image(s), validating on {len(val_idx)}")
     W, b, _mu, _sd, history = train_head(
@@ -549,6 +733,9 @@ def main(argv: list[str] | None = None) -> int:
     if n_val:
         probs_val = predict(X[val_idx], W, b, args.loss)
         report(Y[val_idx], probs_val, labels, args.threshold, args.loss)
+        if args.loss == "ce":
+            confusion(Y[val_idx], probs_val, labels, args.threshold)
+        report_by_source(Y[val_idx], probs_val, labels, [sources[i] for i in val_idx])
         if args.binary_label:
             report_binary(Y[val_idx], probs_val, labels, args.binary_label, args.loss)
         print("  (validation -- this is the number that matters)")
@@ -578,15 +765,28 @@ def main(argv: list[str] | None = None) -> int:
         "target": args.target,
         "priority": args.priority,
         "threshold": args.threshold,
+        # Inline as well as labels.json: the phone shows these verbatim, and a
+        # manifest that only points at a side file is easy to ship half-copied.
+        "labels": list(labels),
         "input_dim": int(X.shape[1]),
         "model": "head.onnx",
         "sha256": hashlib.sha256(head_path.read_bytes()).hexdigest(),
     }
+    if args.semantic:
+        # The loader needs to know the split point: it appends the CLIP vector to
+        # the WD14 features in exactly this order.
+        manifest["semantic_dim"] = int(semantic_dim)
     if args.loss == "ce":
         # Not a knobs the loader reads: it tells whoever opens plugin.json that
         # the scores sum to 1 and that at most one label can win.
         manifest["exclusive"] = True
         manifest["activation"] = "softmax"
+
+    # Retraining must not silently disarm post-processing that was tuned by hand.
+    # The size prior lives in plugin.json only, so a fresh export used to delete
+    # it and nobody noticed until the accuracy dropped.
+    manifest = merge_manifest(manifest, read_manifest(out / "plugin.json"))
+
     (out / "plugin.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )

@@ -66,13 +66,13 @@ tools\albumcat.cmd plugins
 一张图**只可能是其中一类**，比如「插画 / 梗图 / 照片 / 截图」。这时用 softmax 交叉熵：
 
 ```bat
-:: data\kindset5\插画\*.jpg  data\kindset5\梗图\*.jpg  data\kindset5\照片\*.jpg  data\kindset5\截图\*.jpg
+:: data\kind8\插画\*.jpg  data\kind8\梗图\*.jpg  data\kind8\照片\*.jpg  data\kind8\截图\*.jpg
 :: 每个子目录恰好一个类别，不再有 background 目录
 .venv\Scripts\python.exe tools\train_feature_plugin.py ^
-  --data data\kindset5 --out plugins\kind --id kind ^
+  --data data\kind8 --out plugins\kind --id kind ^
   --name "画面类型" --target tag --threshold 0.5 ^
   --loss ce --class-weight ^
-  --cache data\kindset5\embeddings.npz --binary-label 插画
+  --cache data\kind8\embeddings.npz --binary-label 插画
 ```
 
 - `--loss ce` 要求每张图**恰好一个**标签（有 background 目录会直接报错退出，因为「无标签」在互斥问题里没有定义）。
@@ -103,6 +103,27 @@ tools\albumcat.cmd plugins
 服务端从不拿上传字节的尺寸当原图尺寸，所以没有 `width`/`height` 就等于关掉（老 APK 就是这样）。
 `albumcat plugins` 会把生效中的先验打出来，`/ui` 每张卡片也会写它挪了多少。
 实测收益与为什么不选更强的那档，见 [分辨率先验](CLASSIFIER.md#分辨率先验size_prior)。
+
+#### 可选的 `semantic_dim`：把 CLIP 向量也拼进来
+
+WD14 的 768 维特征描述的是「画面里有什么标签」，它分不清「这张图是画出来的还是拍出来的」；
+Chinese-CLIP 的 512 维描述的正是「这张图看起来像什么」。把两者**首尾拼接**成 1,280 维再训练，
+是唯一一个稳定赢过单一特征的改动（AUC .855 → .907，准确率 77.5% → 82.9%）。
+
+```bat
+.venv\Scripts\python.exe tools\train_feature_plugin.py ^
+  --jsonl data\datasets\kind8\manifest.jsonl --out plugins\kind ^
+  --loss ce --class-weight --semantic ^
+  --cache data\datasets\kind8\embeddings_semantic.npz
+```
+
+- `--semantic` 在 WD14 特征后面追加 CLIP 向量；`plugin.json` 会写 `"semantic_dim": 512`，
+  `input_dim` 变成 1280。
+- 服务端看到 `semantic_dim` 才会去算 CLIP：`serve` 本来就有这个塔（语义搜索用），
+  所以**不多加载一个模型**；`albumcat run` 这类命令行会按需懒加载一次。
+- **CLIP 不可用时这个头会弃权**（不发任何标签），而不是拿 768 维硬跑 1,280 维的头——
+  少一个「画面类型」标签，好过发一个用零向量算出来的错标签。
+- 缓存指纹里带了 `semantic` 标记，纯 WD14 的旧缓存不会被误用到融合训练上。
 
 > **不需要上游的拆分模型。** 上游 README 让你用 `split_model.py` 切出
 > 1.2 GB 的 `feature_extractor.onnx` + 43 MB 的 `classifier.onnx`；本项目改用

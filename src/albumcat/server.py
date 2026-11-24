@@ -123,10 +123,16 @@ class TaggingService:
         # optional: a folder tree whose subfolders name the four classes, so the
         # page can score itself instead of just looking pretty
         self.truth_dir = str(truth_dir or "")
-        self.pipeline = Pipeline(config, tagger=load_tagger(config, warmup=warmup))
         # Chinese-CLIP is optional: a missing model leaves `available` False and
-        # the tagging endpoints keep working exactly as before.
+        # the tagging endpoints keep working exactly as before. It is built
+        # *before* the pipeline so a plugin that consumes CLIP vectors can use
+        # the very same encoder instead of loading a second copy.
         self.semantic = SemanticEncoder(config.semantic)
+        self.pipeline = Pipeline(
+            config,
+            tagger=load_tagger(config, warmup=warmup),
+            semantic=self.semantic,
+        )
         self.ocr = OcrEngine(config.ocr)
         # OCR is keyed by image digest and cached separately from the tag
         # payload: the tag payload must stay byte-identical for clients that

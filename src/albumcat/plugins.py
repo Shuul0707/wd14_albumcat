@@ -116,6 +116,11 @@ class PluginManifest:
     #: literal would reject correct plugins on the most common WD14 export. Read
     #: the real value with `albumcat model`.
     input_dim: int = 0
+    #: Width of the *CLIP* half of the input, when the head wants one. ``0``
+    #: means "WD14 embedding only". With ``semantic_dim = 512`` the head sees
+    #: ``concat(wd14_embedding, clip_vector)`` -- 1,280 numbers -- which is the
+    #: one fusion that measurably beat either feature alone (AUC .855 -> .907).
+    semantic_dim: int = 0
     model: str = ""
     rules: str = ""
     endpoint: str = ""
@@ -184,12 +189,17 @@ class ImageItem:
     ``embedding`` is the WD14 penultimate feature vector (768-d for ViT-B/16),
     present only when the loaded model exposes a ``features`` output; ``feature``
     plugins are skipped without it.
+
+    ``semantic`` is the Chinese-CLIP image vector (512-d), filled in only when a
+    plugin declares ``semantic_dim`` -- the two towers disagree enough that
+    concatenating them is worth a second encoder pass, but nobody else needs it.
     """
 
     path: str = ""
     asset_id: str = ""
     image: Any = None  # PIL.Image.Image
     embedding: np.ndarray | None = None
+    semantic: np.ndarray | None = None
     base: TagSet = field(default_factory=TagSet)
     # The *original* dimensions, when the caller knows them. They are no longer
     # recoverable from ``image`` on the phone's path -- the payload is a 448 px
@@ -248,6 +258,9 @@ class _Base:
         self.manifest = manifest
         self.context = context
         self.exclusive = bool(manifest.extra.get("exclusive"))
+        # A head may be trained on WD14 features, CLIP features, or both stacked;
+        # ``semantic_dim`` is what tells the pipeline to run the second tower.
+        self.semantic_dim = int(manifest.semantic_dim or 0)
         # Resolution is invisible to a model that only ever sees a 448 px square,
         # so a plugin may declare an explicit logit shift on one label instead.
         self.size_prior = SizePrior.from_manifest(manifest.extra.get("size_prior"))
@@ -318,6 +331,28 @@ class _Base:
         raise NotImplementedError
 
     # -- helpers ------------------------------------------------------- #
+    def _input_vector(self, item: ImageItem) -> np.ndarray | None:
+        """The vector this head eats: WD14 features, CLIP vector, or both stacked.
+
+        Order matters and is the trainer's: ``concat([embedding, semantic])``.
+        Returning ``None`` means "this image cannot be judged" -- the caller then
+        emits nothing rather than a guess from a half-filled input.
+        """
+        if item.embedding is None:
+            return None
+        parts = [np.asarray(item.embedding, dtype=np.float32).reshape(-1)]
+        if self.semantic_dim:
+            if item.semantic is None:
+                return None
+            semantic = np.asarray(item.semantic, dtype=np.float32).reshape(-1)
+            if semantic.size != self.semantic_dim:
+                raise PluginError(
+                    f"{self.manifest.id}: manifest says semantic_dim "
+                    f"{self.semantic_dim} but the CLIP vector is {semantic.size}-d"
+                )
+            parts.append(semantic)
+        return np.concatenate(parts).reshape(1, -1)
+
     def _predictions(self, keys: Sequence[str], scores: Sequence[float]) -> list[Prediction]:
         threshold = self.manifest.threshold
         pairs = [(str(key), float(score)) for key, score in zip(keys, scores)]
@@ -406,9 +441,9 @@ class OnnxHeadRecognizer(_Base):
         return self._predictions([key for key, _ in scores], [value for _, value in scores])
 
     def _scores(self, item: ImageItem) -> list[tuple[str, float]]:
-        if item.embedding is None:
+        vector = self._input_vector(item)
+        if vector is None:
             return []
-        vector = np.asarray(item.embedding, dtype=np.float32).reshape(1, -1)
         raw = np.asarray(
             self.session.run([self._output_name], {self._input_name: vector})[0]
         ).reshape(-1)
@@ -668,6 +703,11 @@ class PluginRegistry:
     @property
     def needs_embedding(self) -> bool:
         return any(r.manifest.kind in EMBEDDING_KINDS for r in self.recognizers)
+
+    @property
+    def needs_semantic(self) -> bool:
+        """True when some head wants the CLIP vector as well as WD14's."""
+        return any(getattr(r, "semantic_dim", 0) for r in self.recognizers)
 
     def rules(self) -> list[Any]:
         return list(self.rule_bundles)

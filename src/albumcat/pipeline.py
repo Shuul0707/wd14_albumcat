@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Any, Iterable, Iterator
 
 from PIL import Image
 
@@ -120,9 +120,16 @@ class Pipeline:
         tagger: Wd14Tagger | None = None,
         registry: PluginRegistry | None = None,
         engine: RuleEngine | None = None,
+        semantic: Any = None,
     ) -> None:
         self.config = config
         self.tagger = tagger if tagger is not None else load_tagger(config)
+        # Optional Chinese-CLIP encoder. ``serve`` already builds one for
+        # semantic search, so a plugin that wants the CLIP vector costs no extra
+        # model load; anything else builds it on first use (see
+        # ``_semantic_vector``) instead of paying for a tower it may never need.
+        self.semantic = semantic
+        self._semantic_failed = False
         if registry is None:
             registry = PluginRegistry(
                 config.plugins.path,
@@ -218,6 +225,7 @@ class Pipeline:
                 image=image,
                 base=tagset,
                 embedding=result.embedding,
+                semantic=self._semantic_vector(image) if self.registry.needs_semantic else None,
                 width=int(origin_size[0]),
                 height=int(origin_size[1]),
             )
@@ -225,6 +233,52 @@ class Pipeline:
 
         return self.engine.evaluate(tagset, asset_id=asset_id, source_path=path), tagset, item
 
+    def _semantic_vector(self, image: Any) -> Any:
+        """CLIP image vector for plugins that ask for it; ``None`` when unusable.
+
+        A missing encoder is not an error -- the plugin abstains and the phone
+        simply gets no picture-type label, which is better than a label computed
+        from zeroed features.
+        """
+        encoder = self.semantic if self.semantic is not None else self._open_semantic()
+        if encoder is None:
+            return None
+        try:
+            if not getattr(encoder, "available", False):
+                return None
+            return encoder.encode_image(image)
+        except Exception as exc:  # noqa: BLE001 - never lose a tagging run to CLIP
+            log.warning("semantic encode failed for plugin input: %s", exc)
+            return None
+
+    def _open_semantic(self) -> Any:
+        """Build the CLIP tower lazily, once, and only if a plugin needs it."""
+        if self._semantic_failed:
+            return None
+        self._semantic_failed = True  # fail once, never retry per image
+        section = getattr(self.config, "semantic", None)
+        if not getattr(section, "enabled", False):
+            log.warning(
+                "a plugin wants CLIP vectors but [semantic] enabled = false; "
+                "it will abstain"
+            )
+            return None
+        try:
+            from .semantic import SemanticEncoder
+
+            encoder = SemanticEncoder(section)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("cannot build the semantic encoder for plugins: %s", exc)
+            return None
+        if not encoder.available:
+            log.warning(
+                "a plugin wants CLIP vectors but the semantic towers are unavailable "
+                "(%s); it will abstain",
+                encoder.info().reason or "unknown reason",
+            )
+            return None
+        self.semantic = encoder
+        return encoder
 
     # ------------------------------------------------------------------ #
     def plan_paths(

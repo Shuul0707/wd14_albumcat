@@ -81,3 +81,34 @@ def test_the_kind_head_is_exclusive_and_names_chinese_labels() -> None:
     assert data["exclusive"] is True
     assert data["activation"] == "softmax"
     assert data["labels"] == ["截图", "插画", "梗图", "照片"]
+
+
+def test_the_kind_head_reads_wd14_plus_clip() -> None:
+    # 768 (WD14) + 512 (Chinese-CLIP) = 1280. The loader rebuilds the same
+    # concat order, so this number is a contract, not a coincidence.
+    data = SHIPPED["kind"]
+    assert data["semantic_dim"] == 512
+    assert data["input_dim"] == 768 + data["semantic_dim"]
+
+
+def test_the_shipped_kind_head_stacks_the_two_towers() -> None:
+    import sys
+
+    import numpy as np
+
+    sys.path.insert(0, str(ROOT / "src"))
+    from albumcat.plugins import ImageItem, OnnxHeadRecognizer, PluginManifest, RecognizerContext
+
+    folder = PLUGINS / "kind"
+    manifest = PluginManifest.from_dict(SHIPPED["kind"], folder / "plugin.json")
+    recognizer = OnnxHeadRecognizer(manifest, RecognizerContext(plugin_dir=folder))
+    assert recognizer.semantic_dim == 512
+
+    # Without the CLIP half the head must abstain, not crash and not guess.
+    only_wd14 = ImageItem(embedding=np.zeros(768, dtype=np.float32))
+    assert recognizer._input_vector(only_wd14) is None
+    both = ImageItem(
+        embedding=np.zeros(768, dtype=np.float32),
+        semantic=np.zeros(512, dtype=np.float32),
+    )
+    assert recognizer._input_vector(both).shape == (1, 1280)
